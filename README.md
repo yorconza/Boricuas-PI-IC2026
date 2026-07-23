@@ -1,3 +1,6 @@
+# Boricuas-PI-IC2026
+Repositorio para presentar avances y almacenar el proyecto de condominios
+
 # 🏢 Condominium - Sistema de Gestión de Condominios
 
 **Condominium** es una aplicación web desarrollada en **React + TypeScript + Vite** que permite gestionar las operaciones diarias de un condominio. Cuenta con tres paneles de acceso según el rol del usuario: **Administrador**, **Guarda** e **Inquilino**.
