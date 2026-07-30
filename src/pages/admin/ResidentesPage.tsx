@@ -1,24 +1,6 @@
 /**
  * ============================================================================
- * Archivo: ResidentesPage.tsx
- * ============================================================================
- *
- * ¿Qué hace?
- * Pantalla de gestión de residentes. Permite crear, ver, editar estado
- * y deshabilitar residentes. Incluye filtros por nombre, departamento,
- * estado de contrato y estado del residente.
- *
- * Componentes que utiliza
- * - PageHeader (título y botón "Nuevo residente")
- * - Drawer (formulario de creación/edición/visión detalle)
- * - Modal (confirmación para deshabilitar)
- * - useData (contexto: residentesData, addActivity, addNotification)
- *
- * Flujo
- * 1. Admin hace clic en "Nuevo residente" → Drawer con formulario
- * 2. Ingresa nombre, departamento, correo, teléfono, estado
- * 3. Guarda → se agrega a la tabla y se registra en activityLog
- *
+ * Archivo: ResidentesPage.tsx (Conectado a SQL Server via DataContext)
  * ============================================================================
  */
 
@@ -30,7 +12,15 @@ import { useData } from '../../context/DataContext';
 import type { Residente } from '../../types';
 
 export default function ResidentesPage() {
-  const { residentesData, setResidentesData, addActivity, addNotification } = useData();
+  const { 
+    residentesData, 
+    crearResidente, 
+    editarResidente, 
+    cambiarEstadoResidente, 
+    addActivity, 
+    addNotification 
+  } = useData();
+
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState<'create' | 'view' | 'edit'>('create');
   const [selectedItem, setSelectedItem] = useState<Residente | null>(null);
@@ -40,6 +30,13 @@ export default function ResidentesPage() {
   const [filtroContrato, setFiltroContrato] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('');
 
+  // Estados para controlar el formulario (sin usar document.getElementById)
+  const [nombre, setNombre] = useState('');
+  const [correo, setCorreo] = useState('');
+  const [telefono, setTelefono] = useState('');
+  const [cedula, setCedula] = useState('');
+  const [estadoSelect, setEstadoSelect] = useState('Activo');
+
   const filtered = residentesData.filter(r => {
     if (buscar && !r.nombre.toLowerCase().includes(buscar.toLowerCase()) && !r.departamento.toLowerCase().includes(buscar.toLowerCase())) return false;
     if (filtroContrato && r.contrato_estado !== filtroContrato) return false;
@@ -47,23 +44,24 @@ export default function ResidentesPage() {
     return true;
   });
 
-  // Simplified save: in edit mode, only update estado
-  const handleSimpleEditSave = useCallback(() => {
-    if (!selectedItem) return;
-    const estadoSelect = document.getElementById('resEstadoEdit') as HTMLSelectElement;
-    const estado = estadoSelect?.value || 'Activo';
-    setResidentesData(prev => prev.map(r =>
-      r.id === selectedItem.id ? { ...r, estado } : r
-    ));
-    addActivity(`Estado de <strong>${selectedItem.nombre}</strong> actualizado a ${estado}`, 'fa-edit', 'var(--accent)');
-    addNotification('admin', 'Residente editado', `Se actualizó el estado de ${selectedItem.nombre} a ${estado}.`, 'fa-edit');
-    setDrawerOpen(false);
-    alert('Estado actualizado correctamente.');
-  }, [selectedItem, setResidentesData, addActivity, addNotification]);
-
   const openDrawer = (mode: 'create' | 'view' | 'edit', item?: Residente) => {
     setDrawerMode(mode);
     setSelectedItem(item || null);
+
+    if (item) {
+      setNombre(item.nombre || '');
+      setCorreo(item.correo || '');
+      setTelefono(item.telefono || '');
+      setCedula(''); // Si la interfaz Residente incluye cédula se asigna aquí
+      setEstadoSelect(item.estado || 'Activo');
+    } else {
+      setNombre('');
+      setCorreo('');
+      setTelefono('');
+      setCedula('');
+      setEstadoSelect('Activo');
+    }
+
     setDrawerOpen(true);
   };
 
@@ -72,53 +70,64 @@ export default function ResidentesPage() {
     setModalOpen(true);
   };
 
-  const handleSave = useCallback(() => {
-    const nombre = (document.getElementById('resNombre') as HTMLInputElement)?.value?.trim() || '';
-    const departamento = (document.getElementById('resDepto') as HTMLInputElement)?.value?.trim() || '';
-    const correo = (document.getElementById('resCorreo') as HTMLInputElement)?.value?.trim() || '';
-    const telefono = (document.getElementById('resTelefono') as HTMLInputElement)?.value?.trim() || '';
-    const contratoSelect = document.getElementById('resContrato') as HTMLSelectElement;
-    const estadoSelect = document.getElementById('resEstado') as HTMLSelectElement;
-    const contrato_estado = contratoSelect?.value || 'Activo';
-    const estado = estadoSelect?.value || 'Activo';
+  // Guardar (POST o PUT a SQL Server)
+  const handleSave = useCallback(async () => {
+    try {
+      if (drawerMode === 'create') {
+        if (!nombre.trim() || !correo.trim()) {
+          alert('Por favor ingrese al menos el nombre y correo');
+          return;
+        }
 
-    if (drawerMode === 'create') {
-      const newId = residentesData.length ? Math.max(...residentesData.map(r => r.id)) + 1 : 1;
-      const newItem: Residente = { id: newId, nombre, departamento, correo, telefono, contrato_estado, estado };
-      setResidentesData(prev => [...prev, newItem]);
-      addActivity(`Nuevo residente registrado: <strong>${nombre}</strong>`, 'fa-user-plus', 'var(--success)');
-      addNotification('admin', 'Nuevo residente', `Se registró a ${nombre} como residente.`, 'fa-user-plus');
-    } else if (drawerMode === 'edit' && selectedItem) {
-      setResidentesData(prev => prev.map(r =>
-        r.id === selectedItem.id ? { ...r, nombre, departamento, correo, telefono, contrato_estado, estado } : r
-      ));
-      addActivity(`Residente editado: <strong>${nombre}</strong>`, 'fa-edit', 'var(--accent)');
-      addNotification('admin', 'Residente editado', `Se actualizó la información de ${nombre}.`, 'fa-edit');
+        // Llamada a la API de SQL Server
+        await crearResidente(nombre, correo, telefono, cedula || '12345678');
+        addActivity(`Nuevo residente registrado: <strong>${nombre}</strong>`, 'fa-user-plus', 'var(--success)');
+        addNotification('admin', 'Nuevo residente', `Se registró a ${nombre} como residente.`, 'fa-user-plus');
+        alert('Residente insertado con éxito en la Base de Datos.');
+      } else if (drawerMode === 'edit' && selectedItem) {
+        // Llamada a la API de edición
+        await editarResidente(selectedItem.id, nombre, correo, telefono, cedula || '12345678');
+        
+        // Si cambió el estado
+        const estaActivo = estadoSelect === 'Activo';
+        if ((selectedItem.estado === 'Activo') !== estaActivo) {
+          await cambiarEstadoResidente(selectedItem.id, estaActivo);
+        }
+
+        addActivity(`Residente editado: <strong>${nombre}</strong>`, 'fa-edit', 'var(--accent)');
+        addNotification('admin', 'Residente editado', `Se actualizó la información de ${nombre}.`, 'fa-edit');
+        alert('Residente actualizado con éxito.');
+      }
+
+      setDrawerOpen(false);
+    } catch (err: any) {
+      console.error('Error al guardar en la BD:', err);
+      alert(`Error al guardar en SQL Server: ${err.message}`);
     }
+  }, [drawerMode, selectedItem, nombre, correo, telefono, cedula, estadoSelect, crearResidente, editarResidente, cambiarEstadoResidente, addActivity, addNotification]);
 
-    setDrawerOpen(false);
-    alert('Datos guardados correctamente.');
-  }, [drawerMode, selectedItem, residentesData, setResidentesData, addActivity, addNotification]);
-
-  const handleDelete = useCallback(() => {
+  // Cambiar estado (Deshabilitar / Reactivar en SQL Server)
+  const handleDelete = useCallback(async () => {
     if (!deleteItem) return;
-    const newEstado = deleteItem.estado === 'Activo' ? 'Inactivo' : 'Activo';
-    setResidentesData(prev => prev.map(r =>
-      r.id === deleteItem.id ? { ...r, estado: newEstado } : r
-    ));
-    if (newEstado === 'Inactivo') {
-      addActivity(`Residente deshabilitado: <strong>${deleteItem.nombre}</strong>`, 'fa-user-slash', 'var(--warning)');
-      addNotification('admin', 'Residente deshabilitado', `${deleteItem.nombre} ha sido deshabilitado.`, 'fa-user-slash');
-    } else {
-      addActivity(`Residente habilitado: <strong>${deleteItem.nombre}</strong>`, 'fa-user-check', 'var(--success)');
-      addNotification('admin', 'Residente habilitado', `${deleteItem.nombre} ha sido habilitado.`, 'fa-user-check');
-    }
-    setModalOpen(false);
-    setDeleteItem(null);
-  }, [deleteItem, setResidentesData, addActivity, addNotification]);
+    try {
+      const activar = deleteItem.estado !== 'Activo';
+      await cambiarEstadoResidente(deleteItem.id, activar);
 
-  // The drawer's onSave will use handleSave for create, handleSimpleEditSave for edit
-  const drawerOnSave = drawerMode === 'edit' ? handleSimpleEditSave : (drawerMode === 'create' ? handleSave : undefined);
+      if (!activar) {
+        addActivity(`Residente deshabilitado: <strong>${deleteItem.nombre}</strong>`, 'fa-user-slash', 'var(--warning)');
+        addNotification('admin', 'Residente deshabilitado', `${deleteItem.nombre} ha sido deshabilitado.`, 'fa-user-slash');
+      } else {
+        addActivity(`Residente habilitado: <strong>${deleteItem.nombre}</strong>`, 'fa-user-check', 'var(--success)');
+        addNotification('admin', 'Residente habilitado', `${deleteItem.nombre} ha sido habilitado.`, 'fa-user-check');
+      }
+
+      setModalOpen(false);
+      setDeleteItem(null);
+    } catch (err: any) {
+      console.error('Error cambiando estado:', err);
+      alert(`Error al cambiar el estado: ${err.message}`);
+    }
+  }, [deleteItem, cambiarEstadoResidente, addActivity, addNotification]);
 
   const renderDrawerContent = () => {
     if (drawerMode === 'view' && selectedItem) {
@@ -160,25 +169,6 @@ export default function ResidentesPage() {
       );
     }
 
-    // Edit mode: only show estado selector
-    if (drawerMode === 'edit') {
-      const data = selectedItem || { estado: 'Activo' };
-      return (
-        <div className="form-section">
-          <h4>Cambiar Estado</h4>
-          <div className="form-group">
-            <label>Estado del residente</label>
-            <select id="resEstadoEdit" defaultValue={data.estado}>
-              <option value="Activo">Activo</option>
-              <option value="Inactivo">Inactivo</option>
-            </select>
-          </div>
-        </div>
-      );
-    }
-
-    // Create mode: show all fields
-    const data = selectedItem || { nombre: '', departamento: '', correo: '', telefono: '', contrato_estado: 'Activo', estado: 'Activo' };
     return (
       <>
         <div className="form-section">
@@ -186,43 +176,36 @@ export default function ResidentesPage() {
           <div className="form-row">
             <div className="form-group">
               <label>Nombre completo</label>
-              <input id="resNombre" type="text" defaultValue={data.nombre} placeholder="Nombre completo" />
+              <input type="text" value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Nombre completo" />
             </div>
             <div className="form-group">
-              <label>Departamento</label>
-              <input id="resDepto" type="text" defaultValue={data.departamento} placeholder="Ej: 3B" />
+              <label>Cédula</label>
+              <input type="text" value={cedula} onChange={e => setCedula(e.target.value)} placeholder="Cédula" />
             </div>
           </div>
           <div className="form-row">
             <div className="form-group">
               <label>Correo</label>
-              <input id="resCorreo" type="email" defaultValue={data.correo} placeholder="correo@email.com" />
+              <input type="email" value={correo} onChange={e => setCorreo(e.target.value)} placeholder="correo@email.com" />
             </div>
             <div className="form-group">
               <label>Teléfono</label>
-              <input id="resTelefono" type="text" defaultValue={data.telefono} placeholder="+506 8888-9999" />
+              <input type="text" value={telefono} onChange={e => setTelefono(e.target.value)} placeholder="+506 8888-9999" />
             </div>
           </div>
         </div>
-        <div className="form-section">
-          <h4>Estado</h4>
-          <div className="form-row">
+        {drawerMode === 'edit' && (
+          <div className="form-section">
+            <h4>Estado</h4>
             <div className="form-group">
-              <label>Contrato</label>
-              <select id="resContrato" defaultValue={data.contrato_estado}>
-                <option value="Activo">Activo</option>
-                <option value="Vencido">Vencido</option>
-              </select>
-            </div>
-            <div className="form-group">
-              <label>Estado</label>
-              <select id="resEstado" defaultValue={data.estado}>
+              <label>Estado del residente</label>
+              <select value={estadoSelect} onChange={e => setEstadoSelect(e.target.value)}>
                 <option value="Activo">Activo</option>
                 <option value="Inactivo">Inactivo</option>
               </select>
             </div>
           </div>
-        </div>
+        )}
       </>
     );
   };
@@ -246,6 +229,7 @@ export default function ResidentesPage() {
             <option value="">Todos</option>
             <option>Activo</option>
             <option>Vencido</option>
+            <option>Sin Contrato</option>
           </select>
         </div>
         <div className="filter-group">
@@ -291,8 +275,8 @@ export default function ResidentesPage() {
         isOpen={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         title={drawerMode === 'create' ? 'Nuevo residente' : drawerMode === 'edit' ? 'Editar residente' : 'Ver residente'}
-        onSave={drawerOnSave}
-        saveText={drawerMode === 'create' ? 'Crear' : (drawerMode === 'edit' ? 'Guardar' : undefined)}
+        onSave={drawerMode !== 'view' ? handleSave : undefined}
+        saveText={drawerMode === 'create' ? 'Crear' : 'Guardar'}
         size="md"
       >
         {renderDrawerContent()}

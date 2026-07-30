@@ -25,20 +25,23 @@ export const getResidentes = async (req: Request, res: Response) => {
     }
 };
 
-// 2. Insertar nuevo residente (POST)
+// 2. Insertar nuevo residente (POST) - CORREGIDO PARA EL SP REAL
 export const createResidente = async (req: Request, res: Response) => {
     try {
         const { id_usuario_actual, nombre_completo, correo, contrasena_hash, telefono, cedula, foto_perfil } = req.body;
 
+        // Convertir el string de la contraseña a Buffer para que coincida con VARBINARY(256)
+        const passwordBuffer = Buffer.from(contrasena_hash || 'temporal123', 'utf-8');
+
         const pool = await getConnection();
         const result = await pool?.request()
-            .input('id_usuario_actual', sql.Int, id_usuario_actual)
-            .input('nombre_completo', sql.VarChar, nombre_completo)
-            .input('correo', sql.VarChar, correo)
-            .input('contrasena_hash', sql.VarBinary, Buffer.from(contrasena_hash))
-            .input('telefono', sql.VarChar, telefono || null)
-            .input('cedula', sql.VarChar, cedula || null)
-            .input('foto_perfil', sql.VarChar, foto_perfil || null)
+            .input('id_usuario_actual', sql.Int, Number(id_usuario_actual) || 1003)
+            .input('nombre_completo', sql.VarChar(150), nombre_completo)
+            .input('correo', sql.VarChar(150), correo)
+            .input('contrasena_hash', sql.VarBinary(256), passwordBuffer)
+            .input('telefono', sql.VarChar(20), telefono || null)
+            .input('cedula', sql.VarChar(30), cedula || null)
+            .input('foto_perfil', sql.VarChar(255), foto_perfil || null)
             .execute('sp_Residente_Insertar');
 
         const nuevoId = result?.recordset?.[0]?.id_usuario_nuevo;
@@ -48,9 +51,9 @@ export const createResidente = async (req: Request, res: Response) => {
             id_usuario_nuevo: nuevoId 
         });
     } catch (error: unknown) {
-        console.error("Error:", error);
+        console.error("Error al insertar residente en SQL Server:", error);
         const err = error as Error;
-        return res.status(400).json({ message: err.message || "Error interno del servidor" });
+        return res.status(400).json({ message: err.message || "Error al registrar residente" });
     }
 };
 
@@ -79,23 +82,29 @@ export const updateResidente = async (req: Request, res: Response) => {
     }   
 };
 
-// 4. Cambiar estado de residente (Desactivar / Reactivar)
+// 4. Cambiar estado de residente (Desactivar / Reactivar) - CORREGIDO
 export const changeEstadoResidente = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const { id_usuario_actual, activo } = req.body; // Recibe el valor booleano 1 o 0 de activo
+        const { id_usuario_actual } = req.body;
+        
+        // Si no viene "activo" en el body, lo deducimos por el endpoint de la URL
+        let estadoActivo = req.body.activo;
+        if (estadoActivo === undefined) {
+            estadoActivo = req.path.endsWith('/reactivar');
+        }
 
         const pool = await getConnection();
         await pool?.request()
             .input('id_usuario_actual', sql.Int, id_usuario_actual)
             .input('id_usuario', sql.Int, Number(id))
-            .input('activo', sql.Bit, activo)
+            .input('activo', sql.Bit, estadoActivo ? 1 : 0)
             .execute('sp_Residente_CambiarEstado');
 
-        const mensajeAccion = activo ? "reactivado" : "desactivado";
+        const mensajeAccion = estadoActivo ? "reactivado" : "desactivado";
         return res.status(200).json({ message: `Residente ${mensajeAccion} exitosamente` });
     } catch (error: unknown) {
-        console.error("Error:", error);
+        console.error("Error cambiando estado de residente:", error);
         const err = error as Error;
         return res.status(400).json({ message: err.message || "Error interno del servidor" });
     }

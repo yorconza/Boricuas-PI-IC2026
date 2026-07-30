@@ -102,31 +102,30 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   // --- Personal CRUD ---
   const recargarPersonal = useCallback(async () => {
-  try {
-    const res = await fetch(`${API_URL}/personal?id_usuario_actual=${ID_ADMIN_ACTUAL}`);
-    const data = await res.json();
+    try {
+      const res = await fetch(`${API_URL}/personal?id_usuario_actual=${ID_ADMIN_ACTUAL}`);
+      const data = await res.json();
 
-    // Validar si el backend respondió con un error o no es un arreglo
-    if (!res.ok || !Array.isArray(data)) {
-      console.error('El backend respondió con un error:', data);
-      return;
+      if (!res.ok || !Array.isArray(data)) {
+        console.error('Error del backend al obtener personal:', data);
+        return;
+      }
+
+      const transformed = data.map((row: PersonalRaw) => ({
+        id_usuario: row.id_usuario,
+        nombre: row.nombre_completo,
+        correo: row.correo,
+        telefono: row.telefono,
+        cedula: row.cedula,
+        dominio: row.correo?.split('@')[1] || '',
+        iniciales: row.nombre_completo?.split(' ').map((p: string) => p[0]).join('').toUpperCase().slice(0, 2) || '',
+        estado: row.activo ? 'Activo' : 'Inactivo'
+      }));
+      setPersonalData(transformed);
+    } catch (err) {
+      console.error('Error de red al recargar personal:', err);
     }
-
-    const transformed = data.map((row) => ({
-      id_usuario: row.id_usuario,
-      nombre: row.nombre_completo,
-      correo: row.correo,
-      telefono: row.telefono,
-      cedula: row.cedula,
-      dominio: row.correo?.split('@')[1] || '',
-      iniciales: row.nombre_completo?.split(' ').map((p: string) => p[0]).join('').toUpperCase().slice(0, 2) || '',
-      estado: row.activo ? 'Activo' : 'Inactivo'
-    }));
-    setPersonalData(transformed);
-  } catch (err) {
-    console.error('Error de red al recargar personal:', err);
-  }
-}, []);
+  }, []);
 
   const crearPersonal = useCallback(async (nombre: string, correo: string, telefono: string, cedula: string) => {
     const res = await fetch(`${API_URL}/personal`, {
@@ -168,15 +167,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
     await recargarPersonal();
   }, [recargarPersonal]);
 
-  // --- Residentes CRUD (AHORA DENTRO DE DataProvider) ---
+  // --- Residentes CRUD ---
   const recargarResidentes = useCallback(async () => {
     try {
       const res = await fetch(`${API_URL}/residentes?id_usuario_actual=${ID_ADMIN_ACTUAL}`);
-      if (!res.ok) throw new Error('Error al cargar residentes');
-      
-      const data: ResidenteRaw[] = await res.json();
-      
-      const transformed: Residente[] = data.map((row) => ({
+      const data = await res.json();
+
+      if (!res.ok || !Array.isArray(data)) {
+        console.error('Error del backend al obtener residentes:', data);
+        return;
+      }
+
+      const transformed: Residente[] = data.map((row: ResidenteRaw) => ({
         id: row.id_usuario,
         nombre: row.nombre_completo,
         departamento: row.departamento || 'Sin asignar',
@@ -188,7 +190,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
       setResidentesData(transformed);
     } catch (err) {
-      console.error('Error cargando residentes:', err);
+      console.error('Error de red al recargar residentes:', err);
     }
   }, []);
 
@@ -235,39 +237,41 @@ export function DataProvider({ children }: { children: ReactNode }) {
     await recargarResidentes();
   }, [recargarResidentes]);
 
-  const cambiarEstadoResidente = useCallback(async (id_usuario: number, activar: boolean) => {
-    const accion = activar ? 'reactivar' : 'desactivar';
-    const res = await fetch(`${API_URL}/residentes/${id_usuario}/${accion}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id_usuario_actual: ID_ADMIN_ACTUAL })
+  const cambiarEstadoResidente = useCallback(async (id: number, activo: boolean) => {
+    const res = await fetch(`${API_URL}/residentes/${id}/changeEstadoResidente`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            id_usuario_actual: 1003,
+            activo: activo ? 1 : 0
+        })
     });
 
     if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.message || 'Error al cambiar estado del residente');
+        const err = await res.json().catch(() => ({ message: 'Error de servidor' }));
+        throw new Error(err.message || 'Error al cambiar estado');
     }
 
     await recargarResidentes();
-  }, [recargarResidentes]);
+}, [recargarResidentes]);
 
   // --- Carga Inicial ---
   useEffect(() => {
     recargarPersonal();
     recargarResidentes();
 
-    fetch(`${API_URL}/contratos`)
+    fetch(`${API_URL}/contratos?id_usuario_actual=${ID_ADMIN_ACTUAL}`)
       .then(res => res.json())
-      .then(data => setContratosData(data))
+      .then(data => { if (Array.isArray(data)) setContratosData(data); })
       .catch(err => console.error('Error cargando contratos:', err));
 
-    fetch(`${API_URL}/reservas`)
+    fetch(`${API_URL}/reservas?id_usuario_actual=${ID_ADMIN_ACTUAL}`)
       .then(res => res.json())
-      .then(data => setAdminReservas(data))
+      .then(data => { if (Array.isArray(data)) setAdminReservas(data); })
       .catch(err => console.error('Error cargando reservas:', err));
   }, [recargarPersonal, recargarResidentes]);
 
-  // --- Notificaciones / Actividad (Helpers) ---
+  // --- Helpers Notificaciones / Actividad ---
   const addActivity = useCallback((descripcion: string, icono = 'fa-circle', color = 'var(--accent)') => {
     const now = new Date();
     setActivityLog(prev => [{
