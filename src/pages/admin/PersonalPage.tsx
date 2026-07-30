@@ -31,7 +31,7 @@ import { useData } from '../../context/DataContext';
 import type { Personal } from '../../types';
 
 export default function PersonalPage() {
-  const { personalData, setPersonalData, addActivity, addNotification } = useData();
+  const { personalData, addActivity, addNotification, crearPersonal, editarPersonal, cambiarEstadoPersonal } = useData();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState<'create' | 'view' | 'edit'>('create');
   const [selectedItem, setSelectedItem] = useState<Personal | null>(null);
@@ -49,52 +49,54 @@ export default function PersonalPage() {
     setModalOpen(true);
   };
 
-  const handleSave = useCallback(() => {
-    const nombre = (document.getElementById('personalNombre') as HTMLInputElement)?.value?.trim() || '';
-    const correo = (document.getElementById('personalCorreo') as HTMLInputElement)?.value?.trim() || '';
-    const telefono = (document.getElementById('personalTelefono') as HTMLInputElement)?.value?.trim() || '';
-    const cedula = (document.getElementById('personalCedula') as HTMLInputElement)?.value?.trim() || '';
-    const estadoSelect = document.getElementById('personalEstado') as HTMLSelectElement;
-    const estado = estadoSelect?.value || 'Activo';
+  const handleSave = useCallback(async () => {
+      const nombre = (document.getElementById('personalNombre') as HTMLInputElement)?.value?.trim() || '';
+      const correo = (document.getElementById('personalCorreo') as HTMLInputElement)?.value?.trim() || '';
+      const telefono = (document.getElementById('personalTelefono') as HTMLInputElement)?.value?.trim() || '';
+      const cedula = (document.getElementById('personalCedula') as HTMLInputElement)?.value?.trim() || '';
 
-    const dominio = correo.split('@')[1] || '';
-    const iniciales = nombre.split(' ').map((p: string) => p[0]).join('').toUpperCase().slice(0, 2);
+      try {
+          if (drawerMode === 'create') {
+              await crearPersonal(nombre, correo, telefono, cedula);
+              addActivity(`Nuevo empleado registrado: <strong>${nombre}</strong>`, 'fa-user-plus', 'var(--success)');
+              addNotification('admin', 'Nuevo empleado', `Se registró a ${nombre} como empleado.`, 'fa-user-plus');
+          } else if (drawerMode === 'edit' && selectedItem) {
+              await editarPersonal(selectedItem.id_usuario, nombre, correo, telefono, cedula);
+              addActivity(`Empleado editado: <strong>${nombre}</strong>`, 'fa-edit', 'var(--accent)');
+              addNotification('admin', 'Empleado editado', `Se actualizó la información de ${nombre}.`, 'fa-edit');
+          }
 
-    if (drawerMode === 'create') {
-      const newId = personalData.length ? Math.max(...personalData.map(p => p.id)) + 1 : 1;
-      const newItem: Personal = { id: newId, nombre, correo, dominio, telefono, cedula, estado, iniciales };
-      setPersonalData(prev => [...prev, newItem]);
-      addActivity(`Nuevo empleado registrado: <strong>${nombre}</strong>`, 'fa-user-plus', 'var(--success)');
-      addNotification('admin', 'Nuevo empleado', `Se registró a ${nombre} como empleado.`, 'fa-user-plus');
-    } else if (drawerMode === 'edit' && selectedItem) {
-      setPersonalData(prev => prev.map(p =>
-        p.id === selectedItem.id ? { ...p, nombre, correo, dominio, telefono, cedula, estado, iniciales } : p
-      ));
-      addActivity(`Empleado editado: <strong>${nombre}</strong>`, 'fa-edit', 'var(--accent)');
-      addNotification('admin', 'Empleado editado', `Se actualizó la información de ${nombre}.`, 'fa-edit');
-    }
+          setDrawerOpen(false);
+          alert('Datos guardados correctamente.');
+      } catch (error: unknown) {
+          const err = error as Error;
+          alert(`Error: ${err.message}`);
+      }
+  }, [drawerMode, selectedItem, crearPersonal, editarPersonal, addActivity, addNotification]);
 
-    setDrawerOpen(false);
-    alert('Datos guardados correctamente.');
-  }, [drawerMode, selectedItem, personalData, setPersonalData, addActivity, addNotification]);
+  const handleDelete = useCallback(async () => {
+      if (!deleteItem) return;
 
-  const handleDelete = useCallback(() => {
-    if (!deleteItem) return;
-    // Toggle estado: if Activo → Inactivo (disable), if Inactivo → Activo (enable)
-    const newEstado = deleteItem.estado === 'Activo' ? 'Inactivo' : 'Activo';
-    setPersonalData(prev => prev.map(p =>
-      p.id === deleteItem.id ? { ...p, estado: newEstado } : p
-    ));
-    if (newEstado === 'Inactivo') {
-      addActivity(`Empleado deshabilitado: <strong>${deleteItem.nombre}</strong>`, 'fa-user-slash', 'var(--warning)');
-      addNotification('admin', 'Empleado deshabilitado', `${deleteItem.nombre} ha sido deshabilitado.`, 'fa-user-slash');
-    } else {
-      addActivity(`Empleado habilitado: <strong>${deleteItem.nombre}</strong>`, 'fa-user-check', 'var(--success)');
-      addNotification('admin', 'Empleado habilitado', `${deleteItem.nombre} ha sido habilitado.`, 'fa-user-check');
-    }
-    setModalOpen(false);
-    setDeleteItem(null);
-  }, [deleteItem, setPersonalData, addActivity, addNotification]);
+      const activar = deleteItem.estado !== 'Activo'; // si está inactivo, lo activamos
+
+      try {
+          await cambiarEstadoPersonal(deleteItem.id_usuario, activar);
+
+          if (!activar) {
+              addActivity(`Empleado deshabilitado: <strong>${deleteItem.nombre}</strong>`, 'fa-user-slash', 'var(--warning)');
+              addNotification('admin', 'Empleado deshabilitado', `${deleteItem.nombre} ha sido deshabilitado.`, 'fa-user-slash');
+          } else {
+              addActivity(`Empleado habilitado: <strong>${deleteItem.nombre}</strong>`, 'fa-user-check', 'var(--success)');
+              addNotification('admin', 'Empleado habilitado', `${deleteItem.nombre} ha sido habilitado.`, 'fa-user-check');
+          }
+      } catch (error: unknown) {
+          const err = error as Error;
+          alert(`Error: ${err.message}`);
+      }
+
+      setModalOpen(false);
+      setDeleteItem(null);
+  }, [deleteItem, cambiarEstadoPersonal, addActivity, addNotification]);
 
   const renderDrawerContent = () => {
     if (drawerMode === 'view' && selectedItem) {
@@ -196,7 +198,7 @@ export default function PersonalPage() {
         </thead>
         <tbody>
           {personalData.map(p => (
-            <tr key={p.id}>
+            <tr key={p.id_usuario}>
               <td data-label="Foto"><span className="avatar-placeholder">{p.iniciales}</span></td>
               <td data-label="Nombre">{p.nombre}</td>
               <td data-label="Correo">{p.correo}</td>
@@ -209,10 +211,14 @@ export default function PersonalPage() {
               <td data-label="Acciones" className="action-icons">
                 <a onClick={() => openDrawer('view', p)} aria-label="Ver"><i className="fas fa-eye"></i></a>
                 <a onClick={() => openDrawer('edit', p)} aria-label="Editar"><i className="fas fa-edit"></i></a>
-                {p.estado === 'Activo' && (
-                  <a onClick={() => openDeleteModal(p)} aria-label="Deshabilitar">
-                    <i className="fas fa-trash-alt"></i>
-                  </a>
+                {p.estado === 'Activo' ? (
+                    <a onClick={() => openDeleteModal(p)} aria-label="Deshabilitar">
+                        <i className="fas fa-trash-alt"></i>
+                    </a>
+                ) : (
+                    <a onClick={() => openDeleteModal(p)} aria-label="Habilitar">
+                        <i className="fas fa-user-check"></i>
+                    </a>
                 )}
               </td>
             </tr>
