@@ -77,7 +77,7 @@ export interface Visitante {
 }
 
 export interface Personal {
-  id: number;
+  id_usuario: number;
   nombre: string;
   correo: string;
   dominio: string;
