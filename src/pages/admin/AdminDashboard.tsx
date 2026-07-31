@@ -2,23 +2,6 @@
  * ============================================================================
  * Archivo: AdminDashboard.tsx
  * ============================================================================
- *
- * ¿Qué hace?
- * Pantalla principal del panel Admin. Muestra indicadores clave (KPI):
- * reservas hoy, visitas, contratos activos, áreas ocupadas e ingresos.
- * También muestra alertas administrativas, actividad reciente y próximas
- * reservas.
- *
- * Componentes que utiliza
- * - useData (contexto de datos: adminReservas, activityLog, alertas)
- * - useLocalDate (formato de fecha y tiempo relativo)
- *
- * Datos que consume
- * - adminReservas: filtradas por fecha actual para obtener reservas de hoy
- * - activityLog: últimas 5 actividades
- * - alertas: últimas 5 alertas
- *
- * ============================================================================
  */
 
 import { useData } from '../../context/DataContext';
@@ -29,9 +12,19 @@ interface AdminDashboardProps {
 }
 
 export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
-  const { adminReservas, activityLog, alertas } = useData();
+  // 1. Asignamos valores por defecto (Arrays vacíos) por si el Context falla o viene undefined
+  const { 
+    adminReservas = [], 
+    activityLog = [], 
+    alertas = [] 
+  } = useData() || {};
+
   const today = getLocalDateString();
-  const reservasHoy = adminReservas.filter(r => r.fecha === today && r.estado !== 'Cancelada');
+
+  // 2. Evaluamos (adminReservas || []) antes del .filter() para garantizar la inmunidad ante undefined
+  const reservasHoy = (adminReservas || []).filter(
+    r => r?.fecha === today && r?.estado !== 'Cancelada'
+  );
 
   return (
     <>
@@ -67,7 +60,10 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
 
       <div className="dashboard-grid">
         <div className="card">
-          <div className="card-header"><h3>Próximas reservas</h3><a href="#reservas" onClick={e => { e.preventDefault(); onNavigate('reservas'); }}>Ver todas</a></div>
+          <div className="card-header">
+            <h3>Próximas reservas</h3>
+            <a href="#reservas" onClick={e => { e.preventDefault(); onNavigate('reservas'); }}>Ver todas</a>
+          </div>
           <div className="next-reservation-item">
             <span className="reservation-time">18:00</span>
             <span className="reservation-info"><strong>Salón Social</strong> · María Pérez</span>
@@ -81,7 +77,7 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
         <div className="card">
           <div className="card-header"><h3>Alertas administrativas</h3></div>
           <div id="alertasContainer">
-            {alertas.length === 0 ? (
+            {(!alertas || alertas.length === 0) ? (
               <p style={{ color: 'var(--text-muted)', padding: 'var(--space-2) 0' }}>No hay alertas.</p>
             ) : (
               alertas.slice(0, 5).map(alerta => (
@@ -99,9 +95,12 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
         </div>
 
         <div className="card">
-          <div className="card-header"><h3>Actividad reciente</h3><a href="#actividad" onClick={e => { e.preventDefault(); onNavigate('actividad'); }}>Ver todas</a></div>
+          <div className="card-header">
+            <h3>Actividad reciente</h3>
+            <a href="#actividad" onClick={e => { e.preventDefault(); onNavigate('actividad'); }}>Ver todas</a>
+          </div>
           <div id="actividadContainer">
-            {activityLog.length === 0 ? (
+            {(!activityLog || activityLog.length === 0) ? (
               <p style={{ color: 'var(--text-muted)', padding: 'var(--space-2) 0' }}>No hay actividad reciente.</p>
             ) : (
               activityLog.slice(0, 5).map(item => (

@@ -105,28 +105,7 @@ export const getHistorialReservas = async (req: Request, res: Response) => {
 };
 
 // 5. Obtener detalle de una reserva (sp_ObtenerDetalleReserva)
-export const getDetalleReserva = async (req: Request, res: Response) => {
-    try {
-        const { id } = req.params; // id_reserva
-        const { id_usuario_actual } = req.query;
 
-        const pool = await getConnection();
-        const result = await pool?.request()
-            .input('id_usuario_actual', sql.Int, Number(id_usuario_actual))
-            .input('id_reserva', sql.Int, Number(id))
-            .execute('sp_ObtenerDetalleReserva');
-
-        if (!result?.recordset || result.recordset.length === 0) {
-            return res.status(404).json({ message: "Reserva no encontrada" });
-        }
-
-        return res.status(200).json(result.recordset[0]);
-    } catch (error: unknown) {
-        console.error("Error:", error);
-        const err = error as Error;
-        return res.status(400).json({ message: err.message || "Error interno del servidor" });
-    }
-};
 
 // 6. Cancelar reserva (sp_CancelarReserva)
 export const cancelarReserva = async (req: Request, res: Response) => {

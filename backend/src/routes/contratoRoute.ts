@@ -1,5 +1,5 @@
-import {Router} from 'express';
-import{
+import { Router } from 'express';
+import {
     getContratos,
     createContrato,
     updateContrato,
@@ -11,6 +11,6 @@ const contrato: Router = Router();
 contrato.get('/', getContratos);
 contrato.post('/', createContrato);
 contrato.put('/:id', updateContrato);
-contrato.patch('/:id', finalizarContrato);
+contrato.patch('/:id/finalizar', finalizarContrato);
 
 export default contrato;
