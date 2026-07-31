@@ -47,18 +47,34 @@ export interface AreaInquilino {
 }
 
 export interface Reserva {
-  id: number;
+  id_reserva: number;
+  id_usuario: number;
+  residente: string;
+  id_area: number;
   area: string;
-  residente?: string;
-  departamento?: string;
+  fecha: string;            // 'YYYY-MM-DD'
+  hora_inicio: string;      // 'HH:mm:ss'
+  hora_fin: string;         // 'HH:mm:ss'
+  cantidad_personas: number;
+  estado: 'Reservado' | 'Completado' | 'Cancelado';
+  estado_pago?: string | null;
+  monto?: number | null;
+  fecha_creacion?: string;
+}
+
+export interface CrearReservaPayload {
+  id_area: number;
   fecha: string;
   hora_inicio: string;
   hora_fin: string;
-  personas: number;
-  estado: string;
-  costo: number;
-  pago_estado: string;
-  horas_anticipacion_cancelacion: number;
+  cantidad_personas: number;
+}
+
+export interface EditarReservaPayload {
+  fecha: string;
+  hora_inicio: string;
+  hora_fin: string;
+  cantidad_personas: number;
 }
 
 export interface Visitante {
@@ -98,8 +114,10 @@ export interface Residente {
 }
 
 export interface Contrato {
-  id: number;
+  id_contrato: number;
+  id_usuario: number;
   residente: string;
+  id_departamento: number;
   departamento: string;
   fecha_inicio: string;
   fecha_fin: string;

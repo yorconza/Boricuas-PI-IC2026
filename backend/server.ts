@@ -3,7 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { getConnection } from './src/config/confDB.js';
 import personalRoute from './src/routes/personalRoute.js';
-import residenteRoute from './src/routes/residenteRoute.js';
+import residente from './src/routes/residenteRoute.js';
 import contratoRoute from './src/routes/contratoRoute.js'
 import reservaRoutes from './src/routes/reservaRoute.js';
 dotenv.config();
@@ -39,7 +39,7 @@ app.get('/api/health', async (req: Request, res: Response) => {
 
 // Registrar las rutas del módulo de personal
 app.use('/api/personal', personalRoute);
-app.use('/api/residentes', residenteRoute);
+app.use('/api/residentes', residente);
 app.use('/api/contratos', contratoRoute)
 app.use('/api/reservas', reservaRoutes)
 
