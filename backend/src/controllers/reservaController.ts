@@ -7,9 +7,18 @@ export const getReservasHoy = async (req: Request, res: Response) => {
     try {
         const { id_usuario_actual } = req.query;
 
+        // SEGURIDAD (cambio): con las rutas protegidas por JWT, el id_usuario_actual
+        // se toma del token firmado (req.user), NO del cliente. Así un atacante no
+        // puede suplantar a otro administrador inventando un id en el query.
+        // El fallback al query solo existe por compatibilidad con llamadas sin token.
+        const idActual = req.user?.id_usuario ?? (Number.isFinite(Number(id_usuario_actual)) ? Number(id_usuario_actual) : undefined);
+        if (!idActual) {
+            return res.status(400).json({ message: 'id_usuario_actual es obligatorio' });
+        }
+
         const pool = await getConnection();
         const result = await pool?.request()
-            .input('id_usuario_actual', sql.Int, Number(id_usuario_actual))
+            .input('id_usuario_actual', sql.Int, idActual)
             .execute('sp_ListarReservas');
 
         return res.status(200).json(result?.recordset);
@@ -23,11 +32,20 @@ export const getReservasHoy = async (req: Request, res: Response) => {
 // 2. Crear reserva (sp_InsertarReserva)
 export const createReserva = async (req: Request, res: Response) => {
     try {
-        const { id_usuario_actual, id_area, fecha, hora_inicio, hora_fin, cantidad_personas } = req.body;
+        const { id_usuario_actual, id_area, fecha, hora_inicio, hora_fin, cantidad_personas } = req.body ?? {};
+
+        // SEGURIDAD (cambio): con las rutas protegidas por JWT, el id_usuario_actual
+        // se toma del token firmado (req.user), NO del cliente. Así un atacante no
+        // puede suplantar a otro administrador inventando un id en el body.
+        // El fallback al body solo existe por compatibilidad con llamadas sin token.
+        const idActual = req.user?.id_usuario ?? (Number.isFinite(Number(id_usuario_actual)) ? Number(id_usuario_actual) : undefined);
+        if (!idActual) {
+            return res.status(400).json({ message: 'id_usuario_actual es obligatorio' });
+        }
 
         const pool = await getConnection();
         const result = await pool?.request()
-            .input('id_usuario_actual', sql.Int, id_usuario_actual)
+            .input('id_usuario_actual', sql.Int, idActual)
             .input('id_area', sql.Int, id_area)
             .input('fecha', sql.Date, fecha)
             .input('hora_inicio', sql.VarChar, hora_inicio)
@@ -52,11 +70,20 @@ export const createReserva = async (req: Request, res: Response) => {
 export const updateReserva = async (req: Request, res: Response) => {
     try {
         const { id } = req.params; // id_reserva en la URL
-        const { id_usuario_actual, fecha, hora_inicio, hora_fin, cantidad_personas } = req.body;
+        const { id_usuario_actual, fecha, hora_inicio, hora_fin, cantidad_personas } = req.body ?? {};
+
+        // SEGURIDAD (cambio): con las rutas protegidas por JWT, el id_usuario_actual
+        // se toma del token firmado (req.user), NO del cliente. Así un atacante no
+        // puede suplantar a otro administrador inventando un id en el body.
+        // El fallback al body solo existe por compatibilidad con llamadas sin token.
+        const idActual = req.user?.id_usuario ?? (Number.isFinite(Number(id_usuario_actual)) ? Number(id_usuario_actual) : undefined);
+        if (!idActual) {
+            return res.status(400).json({ message: 'id_usuario_actual es obligatorio' });
+        }
 
         const pool = await getConnection();
         await pool?.request()
-            .input('id_usuario_actual', sql.Int, id_usuario_actual)
+            .input('id_usuario_actual', sql.Int, idActual)
             .input('id_reserva', sql.Int, Number(id))
             .input('fecha', sql.Date, fecha)
             .input('hora_inicio', sql.VarChar, hora_inicio)
@@ -85,9 +112,18 @@ export const getHistorialReservas = async (req: Request, res: Response) => {
             residente 
         } = req.query;
 
+        // SEGURIDAD (cambio): con las rutas protegidas por JWT, el id_usuario_actual
+        // se toma del token firmado (req.user), NO del cliente. Así un atacante no
+        // puede suplantar a otro administrador inventando un id en el query.
+        // El fallback al query solo existe por compatibilidad con llamadas sin token.
+        const idActual = req.user?.id_usuario ?? (Number.isFinite(Number(id_usuario_actual)) ? Number(id_usuario_actual) : undefined);
+        if (!idActual) {
+            return res.status(400).json({ message: 'id_usuario_actual es obligatorio' });
+        }
+
         const pool = await getConnection();
         const result = await pool?.request()
-            .input('id_usuario_actual', sql.Int, Number(id_usuario_actual))
+            .input('id_usuario_actual', sql.Int, idActual)
             .input('fecha_desde', sql.Date, fecha_desde || null)
             .input('fecha_hasta', sql.Date, fecha_hasta || null)
             .input('id_area', sql.Int, id_area ? Number(id_area) : null)
@@ -111,11 +147,22 @@ export const getHistorialReservas = async (req: Request, res: Response) => {
 export const cancelarReserva = async (req: Request, res: Response) => {
     try {
         const { id } = req.params; // id_reserva
-        const { id_usuario_actual } = req.body;
+        // NOTA (cambio): `req.body ?? {}` — en Express 5, req.body es undefined
+        // cuando la petición no envía cuerpo (este PATCH se llama sin body).
+        const { id_usuario_actual } = req.body ?? {};
+
+        // SEGURIDAD (cambio): con las rutas protegidas por JWT, el id_usuario_actual
+        // se toma del token firmado (req.user), NO del cliente. Así un atacante no
+        // puede suplantar a otro administrador inventando un id en el body.
+        // El fallback al body solo existe por compatibilidad con llamadas sin token.
+        const idActual = req.user?.id_usuario ?? (Number.isFinite(Number(id_usuario_actual)) ? Number(id_usuario_actual) : undefined);
+        if (!idActual) {
+            return res.status(400).json({ message: 'id_usuario_actual es obligatorio' });
+        }
 
         const pool = await getConnection();
         await pool?.request()
-            .input('id_usuario_actual', sql.Int, id_usuario_actual)
+            .input('id_usuario_actual', sql.Int, idActual)
             .input('id_reserva', sql.Int, Number(id))
             .execute('sp_CancelarReserva');
 
@@ -132,9 +179,18 @@ export const getEstadisticasMensuales = async (req: Request, res: Response) => {
     try {
         const { id_usuario_actual, anio, mes } = req.query;
 
+        // SEGURIDAD (cambio): con las rutas protegidas por JWT, el id_usuario_actual
+        // se toma del token firmado (req.user), NO del cliente. Así un atacante no
+        // puede suplantar a otro administrador inventando un id en el query.
+        // El fallback al query solo existe por compatibilidad con llamadas sin token.
+        const idActual = req.user?.id_usuario ?? (Number.isFinite(Number(id_usuario_actual)) ? Number(id_usuario_actual) : undefined);
+        if (!idActual) {
+            return res.status(400).json({ message: 'id_usuario_actual es obligatorio' });
+        }
+
         const pool = await getConnection();
         const result = await pool?.request()
-            .input('id_usuario_actual', sql.Int, Number(id_usuario_actual))
+            .input('id_usuario_actual', sql.Int, idActual)
             .input('anio', sql.Int, Number(anio))
             .input('mes', sql.Int, mes ? Number(mes) : null)
             .execute('sp_EstadisticasMensuales');

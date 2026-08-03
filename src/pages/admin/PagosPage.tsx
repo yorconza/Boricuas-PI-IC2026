@@ -19,10 +19,12 @@ import { useState, useCallback } from 'react';
 import PageHeader from '../../components/PageHeader';
 import Drawer from '../../components/Drawer';
 import { useData } from '../../context/DataContext';
+import { useAlert } from '../../components/Alert';
 import type { Pago } from '../../types';
 
 export default function PagosPage() {
   const { pagosData, addActivity, addNotification } = useData();
+  const { showAlert } = useAlert();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState<'view' | 'create'>('view');
   const [selectedItem, setSelectedItem] = useState<Pago | null>(null);
@@ -42,25 +44,20 @@ export default function PagosPage() {
   const handleSave = useCallback(() => {
     if (drawerMode === 'create') {
       const residente = (document.getElementById('pagoResidente') as HTMLInputElement)?.value?.trim() || '';
-      const concepto = (document.getElementById('pagoConcepto') as HTMLInputElement)?.value?.trim() || '';
       const monto = (document.getElementById('pagoMonto') as HTMLInputElement)?.value?.trim() || '';
-      const metodoSelect = document.getElementById('pagoMetodo') as HTMLSelectElement;
-      const metodo = metodoSelect?.value || 'Transferencia';
-      const fecha = new Date().toISOString().split('T')[0];
 
-      const newId = pagosData.length ? Math.max(...pagosData.map(p => p.id)) + 1 : 1;
-      const newItem: Pago = {
-        id: newId, residente, concepto, monto, fecha, metodo, estado: 'Pagado'
-      };
-      // We can't add directly since pagosData state is not settable
+      // NOTA (cambio para compilar con `tsc -b`): se eliminó la construcción de
+      // `newItem`/`newId` (y las variables que solo lo alimentaban: concepto,
+      // metodo, fecha) porque nunca se usaban (TS6133: declarado pero sin uso).
+      // El registro del pago solo se refleja vía actividad y notificación.
       addActivity(`Pago registrado de <strong>${residente}</strong> por ${monto}`, 'fa-credit-card', 'var(--success)');
       addNotification('admin', 'Nuevo pago', `${residente} realizó un pago de ${monto}.`, 'fa-credit-card');
       setDrawerOpen(false);
-      alert('Pago registrado correctamente.');
+      showAlert('Pago registrado correctamente.', { titulo: 'Éxito', tipo: 'success' });
     } else {
       setDrawerOpen(false);
     }
-  }, [drawerMode, pagosData, addActivity, addNotification]);
+  }, [drawerMode, addActivity, addNotification, showAlert]);
 
   const renderDrawerContent = () => {
     if (drawerMode === 'view' && selectedItem) {
@@ -112,7 +109,7 @@ export default function PagosPage() {
         </div>
         <div className="form-group">
           <label>Monto</label>
-          <input id="pagoMonto" type="text" placeholder="$0.00" />
+          <input id="pagoMonto" type="text" placeholder="₡0" />
         </div>
         <div className="form-group">
           <label>Método</label>
@@ -134,9 +131,9 @@ export default function PagosPage() {
         </button>
       </PageHeader>
       <div className="payment-summary">
-        <div className="stat-card"><div className="stat-label">Total recaudado</div><div className="stat-value">$12,450</div></div>
-        <div className="stat-card"><div className="stat-label">Pendientes</div><div className="stat-value">$2,300</div></div>
-        <div className="stat-card"><div className="stat-label">Pagados hoy</div><div className="stat-value">$1,280</div></div>
+        <div className="stat-card"><div className="stat-label">Total recaudado</div><div className="stat-value">₡12.450</div></div>
+        <div className="stat-card"><div className="stat-label">Pendientes</div><div className="stat-value">₡2.300</div></div>
+        <div className="stat-card"><div className="stat-label">Pagados hoy</div><div className="stat-value">₡1.280</div></div>
       </div>
       <table className="table-modern">
         <thead><tr><th>Residente</th><th>Concepto</th><th>Monto</th><th>Fecha</th><th>Método</th><th>Estado</th><th>Acciones</th></tr></thead>

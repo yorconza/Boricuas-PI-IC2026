@@ -8,6 +8,7 @@ import { useState, useCallback } from 'react';
 import PageHeader from '../../components/PageHeader';
 import Drawer from '../../components/Drawer';
 import { useData } from '../../context/DataContext';
+import { useAlert } from '../../components/Alert';
 import type { Reserva } from '../../types';
 
 export default function ReservasPage() {
@@ -19,6 +20,7 @@ export default function ReservasPage() {
     addActivity, 
     addNotification 
   } = useData();
+  const { showAlert, confirmar } = useAlert();
 
   const [activeTab, setActiveTab] = useState<'hoy' | 'historial'>('hoy');
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -67,11 +69,14 @@ export default function ReservasPage() {
     setSelectedItem(item || null);
 
     if (mode === 'edit' && item) {
-      setIdArea(item.id_area);
+      // NOTA (cambio para compilar con `tsc -b`): `id_area` y `cantidad_personas`
+      // son opcionales en la interfaz `Reserva` (forma API vs forma UI/mock),
+      // por eso se garantiza un valor numérico con `??` antes de setear el estado.
+      setIdArea(item.id_area ?? 0);
       setFecha(item.fecha);
       setHoraInicio(item.hora_inicio);
       setHoraFin(item.hora_fin);
-      setCantidadPersonas(item.cantidad_personas);
+      setCantidadPersonas(item.cantidad_personas ?? 1);
     } else if (mode === 'create') {
       setIdArea(0);
       setFecha(hoyFechaStr);
@@ -85,7 +90,7 @@ export default function ReservasPage() {
 
   const handleCreateSave = useCallback(async () => {
     if (!idArea || !fecha || !horaInicio || !horaFin) {
-      alert('Por favor complete todos los campos obligatorios.');
+      showAlert('Por favor complete todos los campos obligatorios.');
       return;
     }
 
@@ -103,21 +108,24 @@ export default function ReservasPage() {
       addNotification('admin', 'Reserva creada', 'Se ha agendado una nueva reserva.', 'fa-calendar-plus');
 
       setDrawerOpen(false);
-      alert('Reserva creada exitosamente.');
+      showAlert('Reserva creada exitosamente.');
     } catch (err: unknown) {
       const error = err as Error;
-      alert(`Error al crear la reserva: ${error.message}`);
+      showAlert(`Error al crear la reserva: ${error.message}`);
     } finally {
       setCargando(false);
     }
-  }, [idArea, fecha, horaInicio, horaFin, cantidadPersonas, crearReserva, addActivity, addNotification]);
+  }, [idArea, fecha, horaInicio, horaFin, cantidadPersonas, crearReserva, addActivity, addNotification, showAlert]);
 
   const handleEditSave = useCallback(async () => {
     if (!selectedItem) return;
 
     try {
       setCargando(true);
-      await editarReserva(selectedItem.id_reserva, {
+      // NOTA (cambio para compilar con `tsc -b`): `id_reserva` es opcional en la
+      // interfaz `Reserva`. Los datos mock/transformados traen `id`, por eso se
+      // prefiere `id` y se cae a `id_reserva` como respaldo para la forma API.
+      await editarReserva(selectedItem.id ?? selectedItem.id_reserva!, {
         fecha,
         hora_inicio: horaInicio,
         hora_fin: horaFin,
@@ -128,25 +136,29 @@ export default function ReservasPage() {
       addNotification('admin', 'Reserva modificada', `Se actualizó la reserva #${selectedItem.id_reserva}.`, 'fa-edit');
 
       setDrawerOpen(false);
-      alert('Reserva actualizada correctamente.');
+      showAlert('Reserva actualizada correctamente.');
     } catch (err: unknown) {
       const error = err as Error;
-      alert(`Error al actualizar reserva: ${error.message}`);
+      showAlert(`Error al actualizar reserva: ${error.message}`);
     } finally {
       setCargando(false);
     }
-  }, [selectedItem, fecha, horaInicio, horaFin, cantidadPersonas, editarReserva, addActivity, addNotification]);
+  }, [selectedItem, fecha, horaInicio, horaFin, cantidadPersonas, editarReserva, addActivity, addNotification, showAlert]);
 
   const handleCancelar = async (idReserva: number, areaNombre: string) => {
-    if (!confirm(`¿Desea cancelar la reserva para ${areaNombre}?`)) return;
+    const confirmado = await confirmar(
+      `¿Desea cancelar la reserva para ${areaNombre}?`,
+      { titulo: 'Cancelar reserva', confirmarTexto: 'Sí, cancelar' }
+    );
+    if (!confirmado) return;
 
     try {
       await cancelarReserva(idReserva);
       addActivity(`Reserva #${idReserva} cancelada`, 'fa-ban', 'var(--error)');
-      alert('Reserva cancelada correctamente.');
+      showAlert('Reserva cancelada correctamente.');
     } catch (err: unknown) {
       const error = err as Error;
-      alert(`Error al cancelar: ${error.message}`);
+      showAlert(`Error al cancelar: ${error.message}`);
     }
   };
 
@@ -337,7 +349,9 @@ export default function ReservasPage() {
                   {r.estado === 'Reservado' && (
                     <>
                       <a onClick={() => openDrawer('edit', r)} aria-label="Editar"><i className="fas fa-edit"></i></a>
-                      <a onClick={() => handleCancelar(r.id_reserva, r.area)} aria-label="Cancelar" style={{ color: 'var(--error)' }}>
+                      {/* NOTA: `id_reserva` es opcional en la interfaz; los datos
+                          mock/transformados traen `id`, se cae a `id_reserva` como respaldo. */}
+                      <a onClick={() => handleCancelar(r.id ?? r.id_reserva!, r.area)} aria-label="Cancelar" style={{ color: 'var(--error)' }}>
                         <i className="fas fa-ban"></i>
                       </a>
                     </>

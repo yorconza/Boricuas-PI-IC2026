@@ -22,7 +22,7 @@
 
 import { useState, useCallback, useEffect, type ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import Sidebar from '../../components/Sidebar';
 import Navbar from '../../components/Navbar';
 import ProfileDrawer from '../../components/ProfileDrawer';
@@ -39,6 +39,7 @@ const navGroups = [
       { href: '#personal', label: 'Personal', icon: 'fa-users', page: 'personal' },
       { href: '#residentes', label: 'Residentes', icon: 'fa-user-friends', page: 'residentes' },
       { href: '#contratos', label: 'Contratos', icon: 'fa-file-signature', page: 'contratos' },
+      { href: '#departamentos', label: 'Departamentos', icon: 'fa-door-open', page: 'departamentos' },
     ]
   },
   {
@@ -73,13 +74,14 @@ const pageTitles: Record<string, string> = {
   reservas: 'Reservas',
   empresas: 'Visitas autorizadas',
   contratos: 'Contratos',
+  departamentos: 'Departamentos',
   pagos: 'Pagos',
   reportes: 'Reportes',
   configuracion: 'Configuración'
 };
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
-  const { profile, updateProfile, logout } = useAuth();
+  const { profile, updateProfile, logout, usuario } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [showProfile, setShowProfile] = useState(false);
@@ -156,6 +158,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           profile={profile}
           onSave={updateProfile}
           onAvatarUpdate={handleAvatarUpdate}
+          role={usuario?.rol}
         />
       )}
     </>

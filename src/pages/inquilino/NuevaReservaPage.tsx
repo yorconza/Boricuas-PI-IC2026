@@ -28,6 +28,7 @@ import { useState } from 'react';
 import { useData } from '../../context/DataContext';
 import { useToast } from '../../components/Toast';
 import { formatHoraAMPM, getLocalDateString } from '../../hooks/useLocalDate';
+import { formatearMoneda } from '../../utils/formatters';
 
 interface NuevaReservaPageProps {
   preselectedAreaId?: number | null;
@@ -95,13 +96,13 @@ export default function NuevaReservaPage({ preselectedAreaId }: NuevaReservaPage
   };
 
   const calcularCosto = () => {
-    if (!area || !horaInicio || !horaFin) return area ? `₡${area.costo_por_hora.toLocaleString()} / hora` : '₡0';
+    if (!area || !horaInicio || !horaFin) return area ? `${formatearMoneda(area.costo_por_hora)} / hora` : formatearMoneda(0);
     const [h1, m1] = horaInicio.split(':').map(Number);
     const [h2, m2] = horaFin.split(':').map(Number);
     const minutos = (h2 * 60 + m2) - (h1 * 60 + m1);
-    if (minutos <= 0) return `₡${area.costo_por_hora.toLocaleString()} / hora`;
+    if (minutos <= 0) return `${formatearMoneda(area.costo_por_hora)} / hora`;
     const horas = minutos / 60;
-    return `₡${(horas * area.costo_por_hora).toLocaleString()}`;
+    return formatearMoneda(horas * area.costo_por_hora);
   };
 
   const handleSubmit = () => {
@@ -124,7 +125,7 @@ export default function NuevaReservaPage({ preselectedAreaId }: NuevaReservaPage
     const pagoMonto = document.getElementById('pagoMonto');
     const confirmarPagoModal = document.getElementById('confirmarPagoModal');
     if (pagoMonto && confirmarPagoModal) {
-      pagoMonto.textContent = '₡' + costo.toLocaleString();
+      pagoMonto.textContent = formatearMoneda(costo);
       confirmarPagoModal.classList.add('open');
     }
   };
@@ -140,6 +141,9 @@ export default function NuevaReservaPage({ preselectedAreaId }: NuevaReservaPage
     const costo = horas * area.costo_por_hora;
 
     const newId = inquilinoReservasData.length ? Math.max(...inquilinoReservasData.map(r => r.id)) + 1 : 1;
+    // NOTA (cambio para compilar con `tsc -b`): `estado` se declara `as const`
+    // para conservar el literal 'Confirmada' y que sea asignable a la unión de
+    // estados de la interfaz `Reserva` (sin `as const`, TS lo amplía a `string`).
     const nuevaReserva = {
       id: newId,
       area: area.nombre,
@@ -147,7 +151,7 @@ export default function NuevaReservaPage({ preselectedAreaId }: NuevaReservaPage
       hora_inicio: horaInicio,
       hora_fin: horaFin,
       personas,
-      estado: 'Confirmada',
+      estado: 'Confirmada' as const,
       costo,
       pago_estado: 'Pagado',
       horas_anticipacion_cancelacion: 1
@@ -240,7 +244,7 @@ export default function NuevaReservaPage({ preselectedAreaId }: NuevaReservaPage
           </p>
           <div className="detail-row">
             <span className="detail-label">Monto a pagar</span>
-            <span className="detail-value" id="pagoMonto">₡0</span>
+            <span className="detail-value" id="pagoMonto">{formatearMoneda(0)}</span>
           </div>
           <div className="detail-row">
             <span className="detail-label">Método de pago</span>

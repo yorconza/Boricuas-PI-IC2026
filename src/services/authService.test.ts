@@ -1,69 +1,112 @@
 /**
- * Pruebas unitarias para el servicio de autenticación (authService).
+ * Pruebas unitarias para el servicio de autenticación real (authService).
  *
  * Verifica que:
- * - iniciarSesion retorne el rol correcto según el dominio del correo
- * - iniciarSesion rechace credenciales inválidas (dominio inexistente)
- * - registrarUsuario cree un inquilino y rechace dominios de admin/guardia
- * - verificarCodigo2FA acepte el código correcto y rechace códigos incorrectos
- * - reenviarCodigo2FA se complete sin errores
+ * - iniciarSesion consuma POST /api/auth/login, devuelva token + usuario mapeado
+ *   y guarde la sesión en localStorage
+ * - registrarUsuario consuma POST /api/auth/register y NO cree sesión local
+ * - verificarCodigo2FA consuma POST /api/auth/2fa/verify, guarde el nuevo token
+ *   (2faVerified) y propague los errores del backend
+ * - reenviarCodigo2FA consuma POST /api/auth/2fa/send y propague los errores
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// Se mockea el cliente HTTP: no se toca la red en los tests
+vi.mock('./apiClient', () => {
+  class ApiError extends Error {
+    status: number;
+    constructor(status: number, message: string) {
+      super(message);
+      this.status = status;
+    }
+  }
+  return {
+    api: {
+      get: vi.fn(),
+      post: vi.fn(),
+      put: vi.fn(),
+      patch: vi.fn(),
+      delete: vi.fn(),
+    },
+    ApiError,
+    TOKEN_KEY: 'token',
+    USUARIO_KEY: 'usuario',
+    rutaPorRol: (rol: string) => rol,
+  };
+});
+
+import { api, ApiError } from './apiClient';
 import { authService } from './authService';
+
+const mockPost = vi.mocked(api.post);
+
+beforeEach(() => {
+  localStorage.clear();
+  mockPost.mockReset();
+});
 
 // ============================================================
 // iniciarSesion
 // ============================================================
 describe('authService.iniciarSesion', () => {
-  it('debe retornar un usuario administrador cuando el correo contiene @admin', async () => {
-    const usuario = await authService.iniciarSesion({
+  it('debe llamar a POST /api/auth/login con las credenciales', async () => {
+    mockPost.mockResolvedValue({
+      token: 'jwt-temporal',
+      usuario: { id: 1, nombre: 'Administrador', correo: 'admin@admin.com', rol: 'Administrador' },
+    });
+
+    await authService.iniciarSesion({ correo: 'admin@admin.com', contrasena: '123456' });
+
+    expect(mockPost).toHaveBeenCalledWith('/auth/login', {
+      correo: 'admin@admin.com',
+      contrasena: '123456',
+    });
+  });
+
+  it('debe devolver el token y el usuario mapeado al shape del frontend', async () => {
+    mockPost.mockResolvedValue({
+      token: 'jwt-temporal',
+      usuario: { id: 1, nombre: 'Administrador', correo: 'admin@admin.com', rol: 'Administrador' },
+    });
+
+    const { token, usuario } = await authService.iniciarSesion({
       correo: 'admin@admin.com',
       contrasena: '123456',
     });
 
+    expect(token).toBe('jwt-temporal');
     expect(usuario).toMatchObject({
+      idUsuario: 1,
+      nombreCompleto: 'Administrador',
+      correo: 'admin@admin.com',
       idRol: 1,
       rol: 'Administrador',
       activo: true,
     });
-    expect(usuario.idUsuario).toBe(1);
-    expect(usuario.nombreCompleto).toBe('Administrador');
   });
 
-  it('debe retornar un usuario guardia cuando el correo contiene @guardia', async () => {
-    const usuario = await authService.iniciarSesion({
-      correo: 'guardia@guardia.com',
-      contrasena: '123456',
+  it('debe guardar token y usuario en localStorage', async () => {
+    mockPost.mockResolvedValue({
+      token: 'jwt-temporal',
+      usuario: { id: 3, nombre: 'Juan Pérez', correo: 'juan@gmail.com', rol: 'Inquilino' },
     });
 
-    expect(usuario).toMatchObject({
-      idRol: 2,
-      rol: 'Guarda',
-      activo: true,
-    });
-  });
+    await authService.iniciarSesion({ correo: 'juan@gmail.com', contrasena: '123456' });
 
-  it('debe retornar un inquilino para cualquier otro correo', async () => {
-    const usuario = await authService.iniciarSesion({
-      correo: 'usuario@email.com',
-      contrasena: 'password',
-    });
-
-    expect(usuario).toMatchObject({
-      idRol: 3,
+    expect(localStorage.getItem('token')).toBe('jwt-temporal');
+    expect(JSON.parse(localStorage.getItem('usuario') ?? '{}')).toMatchObject({
+      idUsuario: 3,
       rol: 'Inquilino',
-      activo: true,
     });
   });
 
-  it('debe convertir el correo a minúsculas antes de evaluar el dominio', async () => {
-    const usuario = await authService.iniciarSesion({
-      correo: 'ADMIN@ADMIN.COM',
-      contrasena: '123456',
-    });
+  it('debe propagar el error del backend si las credenciales son inválidas', async () => {
+    mockPost.mockRejectedValue(new Error('Credenciales inválidas'));
 
-    expect(usuario.rol).toBe('Administrador');
+    await expect(
+      authService.iniciarSesion({ correo: 'malo@malo.com', contrasena: 'x' })
+    ).rejects.toThrow('Credenciales inválidas');
   });
 });
 
@@ -71,66 +114,94 @@ describe('authService.iniciarSesion', () => {
 // registrarUsuario
 // ============================================================
 describe('authService.registrarUsuario', () => {
-  it('debe registrar un usuario inquilino con datos válidos', async () => {
-    const usuario = await authService.registrarUsuario({
+  it('debe llamar a POST /api/auth/register con los datos', async () => {
+    mockPost.mockResolvedValue({ message: 'Inquilino registrado exitosamente', id_usuario: 5 });
+
+    const resultado = await authService.registrarUsuario({
       nombreCompleto: 'Juan Pérez',
-      correo: 'juan@email.com',
-      contrasena: 'SecurePass1!',
+      correo: 'juan@gmail.com',
+      contrasena: 'Secreto123!',
+      telefono: '809-555-0100',
     });
 
-    expect(usuario).toMatchObject({
-      idUsuario: 4,
-      rol: 'Inquilino',
-      activo: true,
+    expect(mockPost).toHaveBeenCalledWith('/auth/register', {
       nombreCompleto: 'Juan Pérez',
+      correo: 'juan@gmail.com',
+      contrasena: 'Secreto123!',
+      telefono: '809-555-0100',
     });
+    expect(resultado).toMatchObject({ message: 'Inquilino registrado exitosamente', id_usuario: 5 });
   });
 
-  it('debe rechazar el registro si el correo contiene admin', async () => {
-    await expect(
-      authService.registrarUsuario({
-        nombreCompleto: 'Admin Falso',
-        correo: 'admin@email.com',
-        contrasena: 'SecurePass1!',
-      })
-    ).rejects.toThrow('The email domain does not correspond to a tenant.');
-  });
+  it('NO debe crear sesión local (el registro no devuelve token)', async () => {
+    mockPost.mockResolvedValue({ message: 'Inquilino registrado exitosamente', id_usuario: 5 });
 
-  it('debe rechazar el registro si el correo contiene guardia', async () => {
-    await expect(
-      authService.registrarUsuario({
-        nombreCompleto: 'Guarda Falso',
-        correo: 'guardia@test.com',
-        contrasena: 'SecurePass1!',
-      })
-    ).rejects.toThrow('The email domain does not correspond to a tenant.');
+    await authService.registrarUsuario({
+      nombreCompleto: 'Juan Pérez',
+      correo: 'juan@gmail.com',
+      contrasena: 'Secreto123!',
+    });
+
+    expect(localStorage.getItem('token')).toBeNull();
+    expect(localStorage.getItem('usuario')).toBeNull();
   });
 });
 
 // ============================================================
-// verificarCodigo2FA
+// verificarCodigo2FA (real: POST /auth/2fa/verify)
 // ============================================================
 describe('authService.verificarCodigo2FA', () => {
-  it('debe retornar un token cuando el código es 123456', async () => {
-    const resultado = await authService.verificarCodigo2FA(1, '123456');
+  it('debe llamar a POST /api/auth/2fa/verify con el código y guardar el nuevo token', async () => {
+    mockPost.mockResolvedValue({ token: 'jwt-2fa-verificado', message: 'Verificación exitosa' });
 
-    expect(resultado).toHaveProperty('token');
-    expect(typeof resultado.token).toBe('string');
-    expect(resultado.token).toMatch(/^2fa-token-/);
+    const resultado = await authService.verificarCodigo2FA('123456');
+
+    expect(mockPost).toHaveBeenCalledWith('/auth/2fa/verify', { codigo: '123456' });
+    expect(resultado.token).toBe('jwt-2fa-verificado');
+    expect(localStorage.getItem('token')).toBe('jwt-2fa-verificado');
   });
 
-  it('debe lanzar un error cuando el código es incorrecto', async () => {
+  it('debe propagar el error del backend cuando el código es inválido', async () => {
+    mockPost.mockRejectedValue(new ApiError(400, 'Código inválido o expirado'));
+
     await expect(
-      authService.verificarCodigo2FA(1, '000000')
-    ).rejects.toThrow('Invalid verification code. Please try again.');
+      authService.verificarCodigo2FA('000000')
+    ).rejects.toThrow('Código inválido o expirado');
+    expect(localStorage.getItem('token')).toBeNull();
   });
 });
 
 // ============================================================
-// reenviarCodigo2FA
+// reenviarCodigo2FA (real: POST /auth/2fa/send)
 // ============================================================
 describe('authService.reenviarCodigo2FA', () => {
-  it('debe completarse sin errores', async () => {
-    await expect(authService.reenviarCodigo2FA(1)).resolves.toBeUndefined();
+  it('debe llamar a POST /api/auth/2fa/send', async () => {
+    mockPost.mockResolvedValue({ message: 'Código enviado', expira_en: 300 });
+
+    await authService.reenviarCodigo2FA();
+
+    expect(mockPost).toHaveBeenCalledWith('/auth/2fa/send', undefined);
+  });
+
+  it('debe marcar el envío como auto (recarga de la página 2FA)', async () => {
+    mockPost.mockResolvedValue({
+      message: 'Ya tienes un código vigente en tu correo',
+      expira_en: 240,
+      ya_enviado: true,
+    });
+
+    const respuesta = await authService.reenviarCodigo2FA({ auto: true });
+
+    expect(mockPost).toHaveBeenCalledWith('/auth/2fa/send', { auto: true });
+    expect(respuesta.ya_enviado).toBe(true);
+    expect(respuesta.expira_en).toBe(240);
+  });
+
+  it('debe propagar el error si el envío del correo falla', async () => {
+    mockPost.mockRejectedValue(
+      new ApiError(502, 'No se pudo enviar el correo con el código. Inténtelo nuevamente.')
+    );
+
+    await expect(authService.reenviarCodigo2FA()).rejects.toThrow('No se pudo enviar el correo');
   });
 });

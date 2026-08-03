@@ -4,17 +4,13 @@
  * ============================================================================
  *
  * ¿Qué hace?
- * Contiene TODOS los datos simulados (mock) de la aplicación. Mientras no
- * exista un backend real, estos datos permiten que la interfaz funcione y
- * se pueda desarrollar sin depender de un servidor.
+ * Contiene los datos simulados (mock) que AÚN no tienen backend: áreas,
+ * pagos, visitas, panel de inquilino y notificaciones. Sirven de respaldo
+ * mientras esas secciones no se conecten a la API.
  *
  * Datos que contiene
  * - initialAreasData       → Áreas comunes (Admin)
- * - initialPersonalData    → Empleados (Admin)
- * - initialResidentesData  → Residentes (Admin)
- * - initialContratosData   → Contratos (Admin)
  * - initialPagosData       → Pagos (Admin)
- * - reservasData           → Reservas globales (Admin)
  * - visitasData            → Visitas (Guardia)
  * - areasDisponibles       → Áreas para Inquilino
  * - inquilinoReservas      → Reservas del inquilino
@@ -23,20 +19,26 @@
  * - getInitial*Notifications() → Notificaciones por rol
  * - adminProfile, guardiaProfile, inquilinoProfile → Perfiles de usuario
  *
+ * NOTA (cambio): Se eliminaron initialPersonalData, initialResidentesData,
+ * initialContratosData y reservasData porque esas colecciones ya se cargan desde
+ * el backend vía DataContext (recargarPersonal/Residentes/Contratos/Reservas).
+ * El frontend ahora muestra los datos reales de la DB, no los mock.
+ *
  * Se comunica con
  * - DataContext.tsx (inicializa el estado global con estos datos)
  * - AuthContext.tsx (usa los perfiles de usuario)
  *
  * Cambios para Backend
- * Cuando exista el backend, este archivo dejará de usarse y los datos
- * vendrán de las respuestas de la API. Sin embargo, puede mantenerse
- * como respaldo para desarrollo o pruebas.
+ * Personal, Residentes, Contratos y Reservas (admin) ya se eliminaron de este
+ * archivo porque DataContext los carga desde la API (recargar*). Los datos que
+ * aquí se mantienen se migrarán a la API en la misma medida que se vayan
+ * conectando sus páginas.
  *
  * ============================================================================
  */
 
 import type {
-  Area, Reserva, Visitante, Personal, Residente, Contrato, Pago,
+  Area, Reserva, Visitante, Pago,
   ActivityItem, AlertaItem, NotificationItem, ProfileData, AreaInquilino
 } from '../types';
 
@@ -46,14 +48,14 @@ export const initialAreasData: Area[] = [
   {
     id: 1, nombre: 'Salón Social', capacidad: '50',
     hora_inicio: '08:00', hora_fin: '22:00',
-    costo: '$20/h',
+    costo: '₡20/h',
     imagen: 'https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=400&q=80',
     estado: 'Disponible',
   },
   {
     id: 2, nombre: 'Piscina', capacidad: '30',
     hora_inicio: '06:00', hora_fin: '20:00',
-    costo: '$10/h',
+    costo: '₡10/h',
     imagen: 'https://images.unsplash.com/photo-1576013551627-0cc20b96c2a7?w=400&q=80',
     estado: 'Mantenimiento',
   },
@@ -66,112 +68,18 @@ export const initialAreasData: Area[] = [
   },
 ];
 
-export const initialPersonalData: Personal[] = [
-  {
-    id: 1, nombre: 'Juan Díaz',
-    correo: 'juan@admin.com', dominio: 'admin.com',
-    telefono: '+506 2222-3333', cedula: '1-234-567',
-    estado: 'Activo', iniciales: 'JD',
-  },
-  {
-    id: 2, nombre: 'María Rodríguez',
-    correo: 'maria@guardia.com', dominio: 'guardia.com',
-    telefono: '+506 3333-4444', cedula: '2-345-678',
-    estado: 'Activo', iniciales: 'MR',
-  },
-  {
-    id: 3, nombre: 'Luis Pérez',
-    correo: 'luis@supervisor.com', dominio: 'supervisor.com',
-    telefono: '+506 4444-5555', cedula: '3-456-789',
-    estado: 'Inactivo', iniciales: 'LP',
-  },
-];
-
-export const initialResidentesData: Residente[] = [
-  {
-    id: 1, nombre: 'Ana Martínez', departamento: '3B',
-    correo: 'ana@email.com', telefono: '+506 1111-2222',
-    contrato_estado: 'Activo', estado: 'Activo',
-  },
-  {
-    id: 2, nombre: 'Carlos Gómez', departamento: '5A',
-    correo: 'carlos@email.com', telefono: '+506 2222-3333',
-    contrato_estado: 'Vencido', estado: 'Inactivo',
-  },
-  {
-    id: 3, nombre: 'Laura Fernández', departamento: '2C',
-    correo: 'laura@email.com', telefono: '+506 3333-4444',
-    contrato_estado: 'Activo', estado: 'Activo',
-  },
-];
-
-export const initialContratosData: Contrato[] = [
-  {
-    id: 1, residente: 'María Pérez', departamento: '101',
-    fecha_inicio: '2024-01-01', fecha_fin: '2025-12-31',
-    estado: 'Activo',
-  },
-  {
-    id: 2, residente: 'Carlos Gómez', departamento: '201',
-    fecha_inicio: '2023-06-01', fecha_fin: '2024-05-31',
-    estado: 'Vencido',
-  },
-];
-
 export const initialPagosData: Pago[] = [
   {
     id: 1, residente: 'María Pérez',
-    concepto: 'Contrato #101', monto: '$450',
+    concepto: 'Contrato #101', monto: '₡450',
     fecha: '2025-04-10', metodo: 'Transferencia',
     estado: 'Pagado',
   },
   {
     id: 2, residente: 'Carlos Gómez',
-    concepto: 'Reserva de Piscina', monto: '$300',
+    concepto: 'Reserva de Piscina', monto: '₡300',
     fecha: '2025-04-09', metodo: 'Efectivo',
     estado: 'Pendiente',
-  },
-];
-
-export const reservasData: Reserva[] = [
-  // Hoy - 3 reservas en 3 franjas (Mañana, Tarde, Noche)
-  {
-    id: 1, area: 'Gimnasio', residente: 'Jeremy',
-    departamento: '3B', fecha: '2026-07-22',
-    hora_inicio: '08:00', hora_fin: '10:00',
-    personas: 3, estado: 'Confirmada', costo: 0,
-    pago_estado: 'Pagado', horas_anticipacion_cancelacion: 1,
-  },
-  {
-    id: 2, area: 'Piscina', residente: 'Jeremy',
-    departamento: '3B', fecha: '2026-07-22',
-    hora_inicio: '15:00', hora_fin: '17:00',
-    personas: 4, estado: 'Confirmada', costo: 20,
-    pago_estado: 'Pagado', horas_anticipacion_cancelacion: 1,
-  },
-  {
-    id: 3, area: 'Salón Social', residente: 'Jeremy',
-    departamento: '3B', fecha: '2026-07-22',
-    hora_inicio: '18:00', hora_fin: '20:00',
-    personas: 8, estado: 'Confirmada', costo: 40,
-    pago_estado: 'Pagado', horas_anticipacion_cancelacion: 1,
-  },
-  // Historial - solo 2 reservas
-  {
-    id: 4, area: 'Salón Social',
-    residente: 'Luis Torres', departamento: '302',
-    fecha: '2026-07-19', hora_inicio: '10:00',
-    hora_fin: '12:00', personas: 8,
-    estado: 'Finalizado', costo: 40,
-    pago_estado: 'Pagado', horas_anticipacion_cancelacion: 1,
-  },
-  {
-    id: 5, area: 'Piscina',
-    residente: 'Ana Martínez', departamento: '3B',
-    fecha: '2026-07-18', hora_inicio: '14:00',
-    hora_fin: '16:00', personas: 3,
-    estado: 'Cancelada', costo: 20,
-    pago_estado: 'Reembolsado', horas_anticipacion_cancelacion: 1,
   },
 ];
 
@@ -354,7 +262,7 @@ export function getInitialActivityLog(): ActivityItem[] {
     {
       id: now + 4,
       descripcion:
-        'Se registró un pago manual de <strong>$450</strong> '
+        'Se registró un pago manual de <strong>₡450</strong> '
         + 'de <strong>María Pérez</strong>',
       icono: 'fa-credit-card', color: 'var(--success)',
       fecha: '19 jul 2026', hora: '16:30', timestamp: now - 86400000,
@@ -378,7 +286,7 @@ export function getInitialAlertas(): AlertaItem[] {
       id: now + 1,
       descripcion:
         'Pago pendiente de <strong>Laura Fernández</strong> '
-        + '(202) · $300',
+        + '(202) · ₡300',
       prioridad: 'Media', icono: 'fa-exclamation-circle',
       color: 'var(--warning)',
       fecha: '20 jul 2026', timestamp: now - 120000,
@@ -407,7 +315,7 @@ export function getInitialAdminNotifications(): NotificationItem[] {
     },
     {
       id: 2, title: 'Nuevo pago',
-      message: 'Carlos Gómez realizó un pago de $450',
+      message: 'Carlos Gómez realizó un pago de ₡450',
       time: '09:45', read: false,
       icon: 'fa-credit-card', timestamp: now - 180000,
     },

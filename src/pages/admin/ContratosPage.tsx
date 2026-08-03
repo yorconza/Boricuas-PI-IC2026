@@ -7,18 +7,21 @@
 import { useState, useCallback } from 'react';
 import PageHeader from '../../components/PageHeader';
 import Drawer from '../../components/Drawer';
+import { useAlert } from '../../components/Alert';
 import { useData } from '../../context/DataContext';
+import { formatearCedula, validarCedula, formatearMoneda } from '../../utils/formatters';
 import type { Contrato } from '../../types';
 
 export default function ContratosPage() {
   const { 
     contratosData, 
+    departamentosData, 
     crearContrato, 
     editarContrato, 
-    finalizarContrato, 
     addActivity, 
     addNotification 
   } = useData();
+  const { showAlert } = useAlert();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState<'create' | 'view' | 'edit'>('create');
@@ -27,18 +30,21 @@ export default function ContratosPage() {
   const [filtroEstado, setFiltroEstado] = useState('');
 
   // Estados del Formulario
-  const [idUsuario, setIdUsuario] = useState<number>(0);
-  const [idDepartamento, setIdDepartamento] = useState<number>(0);
+  const [cedula, setCedula] = useState('');
+  const [numeroDepartamento, setNumeroDepartamento] = useState('');
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
   const [montoMensual, setMontoMensual] = useState<number>(0);
   const [montoDeposito, setMontoDeposito] = useState<number>(0);
-  const [observaciones, setObservaciones] = useState('');
   const [cargando, setCargando] = useState(false);
 
   // Auxiliar para obtener propiedades opcionales o con distintos nombres de la interfaz
+  // (compatibilidad forma API vs forma UI). El uso de `any` aquí es intencional:
+  // accede a claves dinámicas que no existen en el tipo `Contrato`.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const getItemProp = useCallback((item: Contrato | null, key: string): any => {
     if (!item) return undefined;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (item as Record<string, any>)[key];
   }, []);
 
@@ -55,20 +61,18 @@ export default function ContratosPage() {
     setSelectedItem(item || null);
 
     if (mode === 'edit' && item) {
-      setIdDepartamento(item.id_departamento || 0);
+      // El departamento NO se edita en un contrato: se asigna solo al crearlo.
       setFechaInicio(item.fecha_inicio || '');
       setFechaFin(item.fecha_fin || '');
       setMontoMensual(getItemProp(item, 'monto_mensual') || getItemProp(item, 'monto') || 0);
       setMontoDeposito(getItemProp(item, 'monto_deposito') || 0);
-      setObservaciones(getItemProp(item, 'observaciones') || '');
     } else if (mode === 'create') {
-      setIdUsuario(0);
-      setIdDepartamento(0);
+      setCedula('');
+      setNumeroDepartamento('');
       setFechaInicio('');
       setFechaFin('');
       setMontoMensual(0);
       setMontoDeposito(0);
-      setObservaciones('');
     }
 
     setDrawerOpen(true);
@@ -76,35 +80,43 @@ export default function ContratosPage() {
 
   // Crear nuevo contrato en BD
   const handleCreateSave = useCallback(async () => {
-    if (!idUsuario || !idDepartamento || !fechaInicio || !fechaFin) {
-      alert('Por favor complete los campos obligatorios.');
+    if (!cedula || !numeroDepartamento || !fechaInicio || !fechaFin) {
+      showAlert('Por favor complete los campos obligatorios.');
+      return;
+    }
+    const errorCedula = validarCedula(cedula);
+    if (errorCedula) {
+      showAlert(errorCedula);
+      return;
+    }
+    if (!Number.isFinite(montoMensual) || montoMensual <= 0 || !Number.isFinite(montoDeposito) || montoDeposito <= 0) {
+      showAlert('El monto mensual y el monto de depósito deben ser mayores a 0.');
       return;
     }
 
     try {
       setCargando(true);
       await crearContrato({
-        id_usuario: Number(idUsuario),
-        id_departamento: Number(idDepartamento),
+        cedula,
+        numero_departamento: numeroDepartamento,
         fecha_inicio: fechaInicio,
         fecha_fin: fechaFin,
         monto_mensual: Number(montoMensual),
-        monto_deposito: Number(montoDeposito),
-        observaciones
+        monto_deposito: Number(montoDeposito)
       });
 
       addActivity(`Nuevo contrato registrado`, 'fa-file-signature', 'var(--accent)');
       addNotification('admin', 'Nuevo contrato', `Se registró exitosamente un contrato.`, 'fa-file-signature');
 
       setDrawerOpen(false);
-      alert('Contrato creado correctamente.');
+      showAlert('Contrato creado correctamente.');
     } catch (err: unknown) {
       const error = err as Error;
-      alert(`Error al crear contrato: ${error.message}`);
+      showAlert(`Error al crear contrato: ${error.message}`);
     } finally {
       setCargando(false);
     }
-  }, [idUsuario, idDepartamento, fechaInicio, fechaFin, montoMensual, montoDeposito, observaciones, crearContrato, addActivity, addNotification]);
+  }, [cedula, numeroDepartamento, fechaInicio, fechaFin, montoMensual, montoDeposito, crearContrato, addActivity, addNotification, showAlert]);
 
   // Editar contrato existente en BD
   const handleEditSave = useCallback(async () => {
@@ -112,48 +124,36 @@ export default function ContratosPage() {
 
     const contractId = getItemProp(selectedItem, 'id_contrato') || getItemProp(selectedItem, 'id');
 
+    if (!Number.isFinite(montoMensual) || montoMensual <= 0 || !Number.isFinite(montoDeposito) || montoDeposito <= 0) {
+      showAlert('El monto mensual y el monto de depósito deben ser mayores a 0.');
+      return;
+    }
+
     try {
       setCargando(true);
       await editarContrato(contractId, {
-        id_departamento: Number(idDepartamento),
         fecha_inicio: fechaInicio,
         fecha_fin: fechaFin,
         monto_mensual: Number(montoMensual),
-        monto_deposito: Number(montoDeposito),
-        observaciones
+        monto_deposito: Number(montoDeposito)
       });
 
       addActivity(`Contrato #${contractId} actualizado`, 'fa-edit', 'var(--accent)');
       addNotification('admin', 'Contrato editado', `Se actualizó la información del contrato.`, 'fa-edit');
 
       setDrawerOpen(false);
-      alert('Contrato actualizado correctamente.');
+      showAlert('Contrato actualizado correctamente.');
     } catch (err: unknown) {
       const error = err as Error;
-      alert(`Error al actualizar: ${error.message}`);
+      showAlert(`Error al actualizar: ${error.message}`);
     } finally {
       setCargando(false);
     }
-  }, [selectedItem, idDepartamento, fechaInicio, fechaFin, montoMensual, montoDeposito, observaciones, editarContrato, addActivity, addNotification, getItemProp]);
-
-  // Finalizar contrato en BD
-  const handleFinalizar = async (id: number, nombre: string) => {
-    if (!confirm(`¿Está seguro de finalizar el contrato de ${nombre}?`)) return;
-
-    try {
-      await finalizarContrato(id);
-      addActivity(`Contrato de <strong>${nombre}</strong> finalizado`, 'fa-file-contract', 'var(--error)');
-      alert('Contrato finalizado exitosamente.');
-    } catch (err: unknown) {
-      const error = err as Error;
-      alert(`Error: ${error.message}`);
-    }
-  };
+  }, [selectedItem, fechaInicio, fechaFin, montoMensual, montoDeposito, editarContrato, addActivity, addNotification, getItemProp, showAlert]);
 
   const renderDrawerContent = () => {
     if (drawerMode === 'view' && selectedItem) {
       const residenteNombre = getItemProp(selectedItem, 'nombre_residente') || getItemProp(selectedItem, 'residenteNombre') || getItemProp(selectedItem, 'residente') || '';
-      const obs = getItemProp(selectedItem, 'observaciones');
 
       return (
         <div className="detail-card">
@@ -174,6 +174,14 @@ export default function ContratosPage() {
             <span className="detail-value">{selectedItem.fecha_fin}</span>
           </div>
           <div className="detail-row">
+            <span className="detail-label">Monto Mensual</span>
+            <span className="detail-value">{formatearMoneda(selectedItem.monto_mensual ?? 0)}</span>
+          </div>
+          <div className="detail-row">
+            <span className="detail-label">Monto Depósito</span>
+            <span className="detail-value">{formatearMoneda(selectedItem.monto_deposito ?? 0)}</span>
+          </div>
+          <div className="detail-row">
             <span className="detail-label">Estado</span>
             <span className="detail-value">
               <span className={`badge ${selectedItem.estado === 'Activo' ? 'badge-success' : 'badge-warning'}`}>
@@ -181,12 +189,6 @@ export default function ContratosPage() {
               </span>
             </span>
           </div>
-          {obs && (
-            <div className="detail-row">
-              <span className="detail-label">Observaciones</span>
-              <span className="detail-value">{obs}</span>
-            </div>
-          )}
         </div>
       );
     }
@@ -197,35 +199,67 @@ export default function ContratosPage() {
         
         {drawerMode === 'create' && (
           <div className="form-group">
-            <label>ID Usuario / Residente *</label>
+            <label>Cédula del residente *</label>
             <input 
-              type="number" 
-              value={idUsuario || ''} 
-              onChange={e => setIdUsuario(Number(e.target.value))} 
-              placeholder="Ej: 1" 
+              type="text" 
+              value={cedula} 
+              onChange={e => setCedula(formatearCedula(e.target.value))} 
+              placeholder="1-234-56789" 
+              maxLength={11} 
             />
           </div>
         )}
 
-        <div className="form-row">
-          <div className="form-group">
-            <label>ID Departamento *</label>
-            <input 
-              type="number" 
-              value={idDepartamento || ''} 
-              onChange={e => setIdDepartamento(Number(e.target.value))} 
-              placeholder="Ej: 1" 
-            />
+        {drawerMode === 'create' ? (
+          <div className="form-row">
+            <div className="form-group">
+              <label>Número de departamento *</label>
+              <select
+                value={numeroDepartamento}
+                onChange={e => setNumeroDepartamento(e.target.value)}
+              >
+                <option value="">Seleccionar...</option>
+                {departamentosData.length === 0 && (
+                  <option value="" disabled>No hay departamentos. Créalos en el módulo de Departamentos.</option>
+                )}
+                {departamentosData.map(d => (
+                  <option
+                    key={d.id_departamento}
+                    value={d.numero}
+                    disabled={d.estado === 'Ocupado' || !d.activo}
+                  >
+                    {d.numero}{d.estado === 'Ocupado' ? ' (Ocupado)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Monto Mensual *</label>
+              <input 
+                type="text" 
+                inputMode="numeric" 
+                maxLength={8} 
+                placeholder="₡0" 
+                title="Formato colones CR: ₡1.234" 
+                value={montoMensual > 0 ? formatearMoneda(montoMensual) : ''} 
+                onChange={e => setMontoMensual(Number(e.target.value.replace(/\D/g, '')))} 
+              />
+            </div>
           </div>
+        ) : (
           <div className="form-group">
             <label>Monto Mensual *</label>
             <input 
-              type="number" 
-              value={montoMensual || ''} 
-              onChange={e => setMontoMensual(Number(e.target.value))} 
+              type="text" 
+              inputMode="numeric" 
+              maxLength={8} 
+              placeholder="₡0" 
+              title="Formato colones CR: ₡1.234" 
+              value={montoMensual > 0 ? formatearMoneda(montoMensual) : ''} 
+              onChange={e => setMontoMensual(Number(e.target.value.replace(/\D/g, '')))} 
             />
           </div>
-        </div>
+        )}
 
         <div className="form-row">
           <div className="form-group">
@@ -249,20 +283,16 @@ export default function ContratosPage() {
         <div className="form-group">
           <label>Monto Depósito</label>
           <input 
-            type="number" 
-            value={montoDeposito || ''} 
-            onChange={e => setMontoDeposito(Number(e.target.value))} 
+            type="text" 
+            inputMode="numeric" 
+            maxLength={8} 
+            placeholder="₡0" 
+            title="Formato colones CR: ₡1.234" 
+            value={montoDeposito > 0 ? formatearMoneda(montoDeposito) : ''} 
+            onChange={e => setMontoDeposito(Number(e.target.value.replace(/\D/g, '')))} 
           />
         </div>
 
-        <div className="form-group">
-          <label>Observaciones</label>
-          <textarea 
-            value={observaciones} 
-            onChange={e => setObservaciones(e.target.value)} 
-            rows={3} 
-          />
-        </div>
       </div>
     );
   };
@@ -291,7 +321,6 @@ export default function ContratosPage() {
             <option value="">Todos</option>
             <option value="Activo">Activo</option>
             <option value="Finalizado">Finalizado</option>
-            <option value="Vencido">Vencido</option>
           </select>
         </div>
       </div>
@@ -303,6 +332,8 @@ export default function ContratosPage() {
             <th>Departamento</th>
             <th>Fecha inicio</th>
             <th>Fecha fin</th>
+            <th>Monto mensual</th>
+            <th>Monto depósito</th>
             <th>Estado</th>
             <th>Acciones</th>
           </tr>
@@ -318,6 +349,8 @@ export default function ContratosPage() {
                 <td data-label="Departamento">{c.departamento}</td>
                 <td data-label="Fecha inicio">{c.fecha_inicio}</td>
                 <td data-label="Fecha fin">{c.fecha_fin}</td>
+                <td data-label="Monto mensual">{formatearMoneda(c.monto_mensual ?? 0)}</td>
+                <td data-label="Monto depósito">{formatearMoneda(c.monto_deposito ?? 0)}</td>
                 <td data-label="Estado">
                   <span className={`badge ${c.estado === 'Activo' ? 'badge-success' : 'badge-warning'}`}>
                     {c.estado}
@@ -326,11 +359,6 @@ export default function ContratosPage() {
                 <td data-label="Acciones" className="action-icons">
                   <a onClick={() => openDrawer('view', c)} aria-label="Ver"><i className="fas fa-eye"></i></a>
                   <a onClick={() => openDrawer('edit', c)} aria-label="Editar"><i className="fas fa-edit"></i></a>
-                  {c.estado === 'Activo' && (
-                    <a onClick={() => handleFinalizar(contractId, residenteNombre)} aria-label="Finalizar" style={{ color: 'var(--error)' }}>
-                      <i className="fas fa-ban"></i>
-                    </a>
-                  )}
                 </td>
               </tr>
             );

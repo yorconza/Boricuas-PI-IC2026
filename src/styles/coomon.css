@@ -770,6 +770,41 @@ body {
     gap: var(--space-4);
 }
 
+/* Campo de contraseña con botón de mostrar/ocultar */
+.password-field {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+.password-field input {
+    padding-right: 44px;
+}
+.password-toggle {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: var(--space-1) var(--space-2);
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color var(--transition-fast);
+}
+.password-toggle:hover {
+    color: var(--accent);
+}
+.form-hint {
+    display: block;
+    margin-top: var(--space-1);
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
 /* ============================================================
    DRAWER
    ============================================================ */
@@ -978,6 +1013,61 @@ body {
 }
 
 /* ============================================================
+   ALERT PERSONALIZADA (reemplaza window.alert())
+   Usa la estructura base .modal-overlay/.modal/.actions y agrega
+   el ícono circular según el tipo de mensaje.
+   ============================================================ */
+.alert-overlay {
+    z-index: 400; /* por encima de modales (300) y drawers (210) */
+}
+.alert-modal {
+    max-width: 400px;
+    text-align: center;
+}
+.alert-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8rem;
+    margin: 0 auto var(--space-3);
+    color: #fff;
+    animation: fadeIn 0.2s ease;
+}
+.alert-icon-info {
+    background: var(--accent);
+}
+.alert-icon-success {
+    background: var(--success);
+}
+.alert-icon-error {
+    background: var(--error);
+}
+.alert-icon-warning {
+    background: var(--warning);
+    color: #000;
+}
+.alert-modal h3 {
+    margin-bottom: var(--space-2);
+}
+.alert-mensaje {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.5;
+    margin-bottom: var(--space-4);
+    word-break: break-word;
+}
+.alert-modal .actions {
+    justify-content: center;
+}
+.alert-aceptar {
+    min-width: 140px;
+    justify-content: center;
+}
+
+/* ============================================================
    DETAIL CARD (fichas de "ver detalle" fuera de modal)
    ============================================================ */
 .detail-card {
@@ -1163,6 +1253,61 @@ body {
 }
 .profile-avatar-section .profile-avatar-controls .file-input-wrapper .file-label i {
     margin-right: var(--space-1);
+}
+
+/* --- Perfil: extras del ProfileDrawer conectado al backend --- */
+.profile-avatar-section .avatar-uploading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+.profile-avatar-section .profile-avatar {
+    position: relative;
+}
+.profile-avatar-section .avatar-hint {
+    margin-top: var(--space-2);
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.drawer-loading {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    padding: var(--space-4) 0;
+}
+
+/* Hint pequeño bajo inputs (ej: correo de acceso bloqueado) */
+.field-hint {
+    display: block;
+    margin-top: 4px;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+/* Botón de cambiar contraseña dentro del drawer */
+.btn-change-password {
+    margin-top: var(--space-1);
+}
+.btn-change-password:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+/* Inputs deshabilitados (correo de acceso de Admin/Guarda) */
+.drawer-body .form-group input:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
 }
 
 /* ============================================================

@@ -22,6 +22,7 @@
  * Rutas principales
  * - /login       → LoginPage
  * - /forgot      → ForgotPasswordPage
+ * - /recuperar   → RecuperarPasswordPage (?token= del correo)
  * - /2fa         → TwoFactorPage
  * - /admin/*     → Panel Administrador (con hash routing interno)
  * - /guardia/*   → Panel Guardia (con hash routing interno)
@@ -48,9 +49,12 @@ import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { DataProvider } from './context/DataContext';
 import { ToastProvider } from './components/Toast';
+import { AlertProvider } from './components/Alert';
 import ErrorBoundary from './components/ErrorBoundary';
+import PrivateRoute from './components/PrivateRoute';
 import LoginPage from './pages/auth/LoginPage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
+import RecuperarPasswordPage from './pages/auth/RecuperarPasswordPage';
 import TwoFactorPage from './pages/auth/TwoFactorPage';
 import AdminLayout from './pages/admin/AdminLayout';
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -60,6 +64,7 @@ import ResidentesPage from './pages/admin/ResidentesPage';
 import ContratosPage from './pages/admin/ContratosPage';
 import ReservasPage from './pages/admin/ReservasPage';
 import AreasPage from './pages/admin/AreasPage';
+import DepartamentosPage from './pages/admin/DepartamentosPage';
 import VisitasPage from './pages/admin/VisitasPage';
 import PagosPage from './pages/admin/PagosPage';
 import ReportesPage from './pages/admin/ReportesPage';
@@ -84,17 +89,26 @@ export default function App() {
         <AuthProvider>
           <DataProvider>
             <ToastProvider>
-              <ErrorBoundary>
+              <AlertProvider>
+                <ErrorBoundary>
                 <Routes>
                   <Route path="/login" element={<LoginPage />} />
                   <Route path="/forgot" element={<ForgotPasswordPage />} />
+                  <Route path="/recuperar" element={<RecuperarPasswordPage />} />
                   <Route path="/2fa" element={<TwoFactorPage />} />
-                  <Route path="/admin/*" element={<AdminRouter />} />
-                  <Route path="/guardia/*" element={<GuardiaRouter />} />
-                  <Route path="/inquilino/*" element={<InquilinoRouter />} />
+                  <Route path="/admin/*" element={
+                    <PrivateRoute roles={['Administrador']}><AdminRouter /></PrivateRoute>
+                  } />
+                  <Route path="/guardia/*" element={
+                    <PrivateRoute roles={['Guarda']}><GuardiaRouter /></PrivateRoute>
+                  } />
+                  <Route path="/inquilino/*" element={
+                    <PrivateRoute roles={['Inquilino']}><InquilinoRouter /></PrivateRoute>
+                  } />
                   <Route path="*" element={<Navigate to="/login" replace />} />
                 </Routes>
               </ErrorBoundary>
+              </AlertProvider>
             </ToastProvider>
           </DataProvider>
         </AuthProvider>
@@ -122,6 +136,7 @@ function AdminRouter() {
       case 'personal': return <PersonalPage />;
       case 'residentes': return <ResidentesPage />;
       case 'contratos': return <ContratosPage />;
+      case 'departamentos': return <DepartamentosPage />;
       case 'reservas': return <ReservasPage />;
       case 'areas': return <AreasPage />;
       case 'empresas': return <VisitasPage />;

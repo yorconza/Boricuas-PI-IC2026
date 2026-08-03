@@ -20,6 +20,7 @@
 
 import { useData } from '../../context/DataContext';
 import { formatHoraAMPM } from '../../hooks/useLocalDate';
+import { formatearMoneda } from '../../utils/formatters';
 
 interface ReservarAreaPageProps {
   onSelectArea: (areaId: number) => void;
@@ -47,7 +48,7 @@ export default function ReservarAreaPage({ onSelectArea }: ReservarAreaPageProps
               <div className="area-name">{a.nombre}</div>
               <div className="area-detail"><strong>Capacidad</strong> {a.capacidad} personas</div>
               <div className="area-detail"><strong>Horario</strong> {formatHoraAMPM(String(a.horario_inicio).padStart(2, '0') + ':00')} - {formatHoraAMPM(String(a.horario_fin).padStart(2, '0') + ':00')}</div>
-              <div className="area-detail"><strong>Costo</strong> ₡{a.costo_por_hora.toLocaleString()} / hora</div>
+              <div className="area-detail"><strong>Costo</strong> {formatearMoneda(a.costo_por_hora)} / hora</div>
               <div className="area-status">
                 <span className={`badge ${a.disponible ? 'badge-success' : 'badge-error'}`}>{a.disponible ? 'Disponible' : 'No disponible'}</span>
               </div>

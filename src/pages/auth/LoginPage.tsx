@@ -37,6 +37,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { authService } from '../../services/authService';
+import { formatearCedula, formatearTelefono, validarCedula, validarTelefono } from '../../utils/formatters';
 
 export default function LoginPage() {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -47,19 +48,22 @@ export default function LoginPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [cedula, setCedula] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [errorLogin, setErrorLogin] = useState<string | null>(null);
   const [errorRegistro, setErrorRegistro] = useState<string | null>(null);
-  const { guardarUsuarioParcial, registrarUsuarioDirecto } = useAuth();
+  const [mensajeLogin, setMensajeLogin] = useState<string | null>(null);
+  const { guardarUsuarioParcial } = useAuth();
   const navigate = useNavigate();
 
   const activateTab = (tabName: 'signin' | 'signup') => {
     setIsSignUp(tabName === 'signup');
   };
 
-  const handleSignIn = async (e: React.MouseEvent) => {
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorLogin(null);
+    setMensajeLogin(null);
 
     if (!loginEmail.includes('@')) {
       setErrorLogin('Please enter a valid email address.');
@@ -71,18 +75,19 @@ export default function LoginPage() {
     }
 
     try {
-      const usuario = await authService.iniciarSesion({
+      // Flujo real: el backend valida credenciales y devuelve el JWT (8h)
+      const { token, usuario } = await authService.iniciarSesion({
         correo: loginEmail,
         contrasena: loginPassword,
       });
-      guardarUsuarioParcial(usuario);
+      guardarUsuarioParcial(usuario, token);
       navigate('/2fa');
     } catch (err) {
       setErrorLogin(err instanceof Error ? err.message : 'An unexpected error occurred.');
     }
   };
 
-  const handleSignUp = async (e: React.MouseEvent) => {
+  const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorRegistro(null);
 
@@ -102,15 +107,39 @@ export default function LoginPage() {
       return;
     }
 
+    // Mismas validaciones de formato que el módulo Personal del admin:
+    // cédula 1-234-56789 (9 dígitos) y teléfono 7777-7777 (8 dígitos).
+    // Campos opcionales: vacío no es error, pero si se llenan deben respetar el formato.
+    const errorTelefono = validarTelefono(phone);
+    if (errorTelefono) {
+      setErrorRegistro(errorTelefono);
+      return;
+    }
+    const errorCedula = validarCedula(cedula);
+    if (errorCedula) {
+      setErrorRegistro(errorCedula);
+      return;
+    }
+
     try {
-      const usuario = await authService.registrarUsuario({
+      // Flujo real: el registro no devuelve token → se envía al login
+      await authService.registrarUsuario({
         nombreCompleto: fullName,
         correo: signupEmail,
         contrasena: signupPassword,
         telefono: phone || undefined,
+        cedula: cedula || undefined,
       });
-      registrarUsuarioDirecto(usuario);
-      navigate('/dashboard/inquilino');
+      setErrorRegistro(null);
+      setMensajeLogin('Cuenta creada exitosamente. Inicia sesión con tu correo.');
+      setFullName('');
+      setSignupEmail('');
+      setSignupPassword('');
+      setConfirmPassword('');
+      setPhone('');
+      setCedula('');
+      setTermsAccepted(false);
+      activateTab('signin');
     } catch (err) {
       setErrorRegistro(err instanceof Error ? err.message : 'Registration failed.');
     }
@@ -160,8 +189,9 @@ export default function LoginPage() {
             </div>
 
             {/* SIGN IN */}
-            <div id="signinForm" className={`form-content ${!isSignUp ? 'active' : ''}`}>
+            <form id="signinForm" className={`form-content ${!isSignUp ? 'active' : ''}`} onSubmit={handleSignIn}>
               {errorLogin && <p className="error">{errorLogin}</p>}
+              {mensajeLogin && <p className="success">{mensajeLogin}</p>}
               <div className="input-group">
                 <label htmlFor="login-email">E-MAIL</label>
                 <input
@@ -185,14 +215,14 @@ export default function LoginPage() {
               <div className="forgot-password">
                 <a href="/forgot" onClick={e => { e.preventDefault(); navigate('/forgot'); }}>Forgot your password?</a>
               </div>
-              <button className="login-btn-primary" onClick={handleSignIn}>Sign In</button>
+              <button type="submit" className="login-btn-primary">Sign In</button>
               <div className="form-footer">
                 <a id="signupTrigger" onClick={() => activateTab('signup')}>Create an account</a>
               </div>
-            </div>
+            </form>
 
             {/* SIGN UP */}
-            <div id="signupForm" className={`form-content ${isSignUp ? 'active' : ''}`}>
+            <form id="signupForm" className={`form-content ${isSignUp ? 'active' : ''}`} onSubmit={handleSignUp}>
               <div className="input-group">
                 <label htmlFor="nombre_completo">FULL NAME</label>
                 <input
@@ -201,6 +231,17 @@ export default function LoginPage() {
                   placeholder="Enter your full name"
                   value={fullName}
                   onChange={e => setFullName(e.target.value)}
+                />
+              </div>
+              <div className="input-group">
+                <label htmlFor="cedula">CÉDULA</label>
+                <input
+                  type="text"
+                  id="cedula"
+                  placeholder="1-234-56789"
+                  maxLength={11}
+                  value={cedula}
+                  onChange={e => setCedula(formatearCedula(e.target.value))}
                 />
               </div>
               <div className="input-group">
@@ -238,9 +279,10 @@ export default function LoginPage() {
                 <input
                   type="tel"
                   id="telefono"
-                  placeholder="Enter your phone number"
+                  placeholder="7777-7777"
+                  maxLength={9}
                   value={phone}
-                  onChange={e => setPhone(e.target.value)}
+                  onChange={e => setPhone(formatearTelefono(e.target.value))}
                 />
               </div>
               <div className="checkbox-group">
@@ -250,14 +292,14 @@ export default function LoginPage() {
                   checked={termsAccepted}
                   onChange={e => setTermsAccepted(e.target.checked)}
                 />
-                <label htmlFor="terms">I agree all statements in <a href="#">terms of service</a></label>
+                <label htmlFor="terms">I agree all statements in <a href="#" onClick={e => e.preventDefault()}>terms of service</a></label>
               </div>
               {errorRegistro && <p className="error">{errorRegistro}</p>}
-              <button className="login-btn-primary" onClick={handleSignUp}>Sign Up</button>
+              <button type="submit" className="login-btn-primary">Sign Up</button>
               <div className="form-footer">
                 <a id="signinTrigger" onClick={() => activateTab('signin')}>I'm already a member</a>
               </div>
-            </div>
+            </form>
           </div>
         </div>
       </div>

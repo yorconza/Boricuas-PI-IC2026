@@ -2,25 +2,48 @@
  * ============================================================================
  * Archivo: DataContext.tsx
  * ============================================================================
+ *
+ * NOTA (cambio - protección de rutas con JWT):
+ * Este provider se comunica con el backend usando el cliente compartido `api`
+ * (services/apiClient.ts) en lugar de fetch() crudo. Razones:
+ *
+ * 1. Las rutas de /api/personal, /residentes, /contratos y /reservas ahora exigen
+ *    un token JWT (middlewares authenticateToken + validateSessionAndSetContext
+ *    + authorizeRole('Administrador')). El api client adjunta automáticamente el
+ *    header `Authorization: Bearer <token>` en cada petición.
+ * 2. Si la sesión expira (respuesta 401), el api client limpia el localStorage y
+ *    redirige a /login automáticamente (sin bucles: login/register no envían token).
+ * 3. Ya NO se envía `id_usuario_actual` desde el cliente: el backend lo toma del
+ *    token firmado (req.user.id_usuario), así un atacante no puede suplantar a
+ *    otro administrador inventando un id.
+ *
+ * Antes: fetch(`${API_URL}/personal?id_usuario_actual=...`) sin token -> tras
+ * proteger las rutas, esas llamadas habrían respondido 401 y la app se habría roto.
+ * ============================================================================
  */
 
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import type {
-  Area, Reserva, Visitante, Personal, Residente, Contrato, Pago,
+  Area, Reserva, Visitante, Personal, Residente, Contrato, Departamento, Pago,
   ActivityItem, AlertaItem, NotificationItem, AreaInquilino, UserRole
 } from '../types';
+// NOTA (cambio): Personal, Residentes, Contratos y Reservas (admin) ya se cargan
+// desde el backend (recargarPersonal/Residentes/Contratos/Reservas), por eso ya
+// NO se importan sus datos mock de sampleData.ts.
 import {
-  initialAreasData, initialPersonalData, initialResidentesData,
-  initialContratosData, initialPagosData, reservasData as sampleReservas,
+  initialAreasData, initialPagosData,
   visitasData, areasDisponibles, inquilinoReservas, inquilinoVisitantes,
   getInitialActivityLog, getInitialAlertas,
   getInitialAdminNotifications, getInitialGuardiaNotifications, getInitialInquilinoNotifications
 } from '../data/sampleData';
+import { useAuth } from '../hooks/useAuth';
+import { api } from '../services/apiClient';
 
 interface PersonalRaw {
   id_usuario: number;
   nombre_completo: string;
   correo: string;
+  correo_contacto?: string | null;
   telefono: string;
   cedula: string;
   activo: boolean;
@@ -37,6 +60,16 @@ interface ResidenteRaw {
   activo: boolean;
 }
 
+interface DepartamentoRaw {
+  id_departamento: number;
+  numero: string;
+  piso?: number | null;
+  metros_cuadrados?: number | null;
+  estado: string;
+  activo: boolean | number;
+  fecha_registro?: string;
+}
+
 interface ContratoRaw {
   id_contrato: number;
   id_usuario: number;
@@ -46,6 +79,8 @@ interface ContratoRaw {
   fecha_inicio: string;
   fecha_fin: string;
   estado: string;
+  monto_mensual?: number;
+  monto_deposito?: number;
   fecha_registro?: string;
 }
 
@@ -81,23 +116,16 @@ export interface EditarReservaDTO {
   cantidad_personas: number;
 }
 
-const ID_ADMIN_ACTUAL = 1003;
-const API_URL = 'http://localhost:4000/api';
-
 interface DataContextType {
   areasData: Area[];
   setAreasData: React.Dispatch<React.SetStateAction<Area[]>>;
   personalData: Personal[];
-  setPersonalData: React.Dispatch<React.SetStateAction<Personal[]>>;
   residentesData: Residente[];
-  setResidentesData: React.Dispatch<React.SetStateAction<Residente[]>>;
   contratosData: Contrato[];
-  setContratosData: React.Dispatch<React.SetStateAction<Contrato[]>>;
+  departamentosData: Departamento[];
   pagosData: Pago[];
   reservasData: Reserva[];
-  setReservasData: React.Dispatch<React.SetStateAction<Reserva[]>>;
   visitas: Visitante[];
-  setVisitas: React.Dispatch<React.SetStateAction<Visitante[]>>;
   areasDisponiblesData: AreaInquilino[];
   inquilinoReservasData: Reserva[];
   setInquilinoReservas: React.Dispatch<React.SetStateAction<Reserva[]>>;
@@ -116,20 +144,25 @@ interface DataContextType {
   markAllRead: (role: UserRole) => void;
 
   // Personal CRUD
-  crearPersonal: (nombre: string, correo: string, telefono: string, cedula: string) => Promise<void>;
-  editarPersonal: (id_usuario: number, nombre: string, correo: string, telefono: string, cedula: string) => Promise<void>;
+  crearPersonal: (nombre: string, correo: string, contrasena: string, telefono: string, cedula: string, correoContacto?: string) => Promise<void>;
+  editarPersonal: (id_usuario: number, nombre: string, correo: string, telefono: string, cedula: string, correoContacto?: string) => Promise<void>;
   cambiarEstadoPersonal: (id_usuario: number, activar: boolean) => Promise<void>;
 
   // Residentes CRUD
-  crearResidente: (nombre: string, correo: string, telefono: string, cedula: string) => Promise<void>;
+  crearResidente: (nombre: string, correo: string, contrasena: string, telefono: string, cedula: string) => Promise<void>;
   editarResidente: (id_usuario: number, nombre: string, correo: string, telefono: string, cedula: string) => Promise<void>;
   cambiarEstadoResidente: (id_usuario: number, activar: boolean) => Promise<void>;
 
   // Contratos CRUD
   recargarContratos: () => Promise<void>;
-  crearContrato: (datos: { id_usuario: number; id_departamento: number; fecha_inicio: string; fecha_fin: string; monto_mensual: number; monto_deposito: number; observaciones?: string }) => Promise<void>;
-  editarContrato: (id_contrato: number, datos: { id_departamento: number; fecha_inicio: string; fecha_fin: string; monto_mensual: number; monto_deposito: number; observaciones?: string }) => Promise<void>;
-  finalizarContrato: (id_contrato: number) => Promise<void>;
+  crearContrato: (datos: { cedula: string; numero_departamento: string; fecha_inicio: string; fecha_fin: string; monto_mensual: number; monto_deposito: number }) => Promise<void>;
+  editarContrato: (id_contrato: number, datos: { fecha_inicio: string; fecha_fin: string; monto_mensual: number; monto_deposito: number }) => Promise<void>;
+
+  // Departamentos CRUD
+  recargarDepartamentos: () => Promise<void>;
+  crearDepartamento: (numero: string, piso: number | null, metrosCuadrados: number | null) => Promise<void>;
+  editarDepartamento: (id_departamento: number, numero: string, piso: number | null, metrosCuadrados: number | null) => Promise<void>;
+  cambiarEstadoDepartamento: (id_departamento: number, activar: boolean) => Promise<void>;
 
   // Reservas CRUD / Consulta
   recargarReservas: () => Promise<void>;
@@ -141,13 +174,17 @@ interface DataContextType {
 const DataContext = createContext<DataContextType | null>(null);
 
 export function DataProvider({ children }: { children: ReactNode }) {
+  // NOTA (cambio): Personal, Residentes, Contratos y Reservas (admin) se cargan
+  // desde el backend al montar el provider (recargar*). Se inicializan vacíos y
+  // se reemplazan con los datos reales de la DB; el mock de sampleData ya no se usa.
   const [areasData, setAreasData] = useState<Area[]>(initialAreasData);
-  const [personalData, setPersonalData] = useState<Personal[]>(initialPersonalData);
-  const [residentesData, setResidentesData] = useState<Residente[]>(initialResidentesData);
-  const [contratosData, setContratosData] = useState<Contrato[]>(initialContratosData);
+  const [personalData, setPersonalData] = useState<Personal[]>([]);
+  const [residentesData, setResidentesData] = useState<Residente[]>([]);
+  const [contratosData, setContratosData] = useState<Contrato[]>([]);
+  const [departamentosData, setDepartamentosData] = useState<Departamento[]>([]);
   const [pagosData] = useState<Pago[]>(initialPagosData);
-  const [adminReservas, setReservasData] = useState<Reserva[]>(sampleReservas);
-  const [visitas, setVisitas] = useState<Visitante[]>(visitasData);
+  const [adminReservas, setReservasData] = useState<Reserva[]>([]);
+  const [visitas] = useState<Visitante[]>(visitasData);
   const [areasDisponiblesData] = useState<AreaInquilino[]>(areasDisponibles);
   const [inquilinoReservasData, setInquilinoReservas] = useState<Reserva[]>(inquilinoReservas);
   const [inquilinoVisitantesData, setInquilinoVisitantes] = useState<Visitante[]>(inquilinoVisitantes);
@@ -158,13 +195,20 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [guardiaNotifications, setGuardiaNotifications] = useState<NotificationItem[]>(getInitialGuardiaNotifications);
   const [inquilinoNotifications, setInquilinoNotifications] = useState<NotificationItem[]>(getInitialInquilinoNotifications);
 
+  // El id_usuario SIEMPRE es el del administrador autenticado (nunca un id fijo):
+  // el SP valida el rol contra este id real y rechaza cualquier otro.
+  const { usuario, verificacion2FA } = useAuth();
+  const idAdminActual = usuario?.idUsuario;
+
   // --- Personal CRUD ---
   const recargarPersonal = useCallback(async () => {
+    // Nunca disparar sin sesión: requiere token JWT de admin autenticado.
+    if (!idAdminActual) return;
     try {
-      const res = await fetch(`${API_URL}/personal?id_usuario_actual=${ID_ADMIN_ACTUAL}`);
-      const data = await res.json();
+      // El api client adjunta el Bearer token automáticamente y redirige a /login si expira.
+      const data = await api.get<PersonalRaw[]>('/personal');
 
-      if (!res.ok || !Array.isArray(data)) {
+      if (!Array.isArray(data)) {
         console.error('Error del backend al obtener personal:', data);
         return;
       }
@@ -173,6 +217,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         id_usuario: row.id_usuario,
         nombre: row.nombre_completo,
         correo: row.correo,
+        correoContacto: row.correo_contacto || '',
         telefono: row.telefono,
         cedula: row.cedula,
         dominio: row.correo?.split('@')[1] || '',
@@ -183,55 +228,36 @@ export function DataProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error('Error de red al recargar personal:', err);
     }
-  }, []);
+  }, [idAdminActual]);
 
-  const crearPersonal = useCallback(async (nombre: string, correo: string, telefono: string, cedula: string) => {
-    const res = await fetch(`${API_URL}/personal`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id_usuario_actual: ID_ADMIN_ACTUAL, nombre_completo: nombre, correo, contrasena_hash: 'temporal123', telefono, cedula, foto_perfil: null })
-    });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.message || 'Error al crear personal');
-    }
+  const crearPersonal = useCallback(async (nombre: string, correo: string, contrasena: string, telefono: string, cedula: string, correoContacto?: string) => {
+    // NOTA (cambio): la contraseña SIEMPRE la escribe el admin en el formulario
+    // (nunca un valor fijo); el backend la hashea con bcrypt ANTES de guardarla.
+    // El id_usuario_actual ahora lo toma el backend del JWT (req.user).
+    // correo_contacto: correo real donde Admin/Guarda reciben el código 2FA.
+    await api.post('/personal', { nombre_completo: nombre, correo, correo_contacto: correoContacto || null, contrasena, telefono, cedula, foto_perfil: null });
     await recargarPersonal();
-  }, [recargarPersonal]);
+  }, [recargarPersonal, idAdminActual]);
 
-  const editarPersonal = useCallback(async (id_usuario: number, nombre: string, correo: string, telefono: string, cedula: string) => {
-    const res = await fetch(`${API_URL}/personal/${id_usuario}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id_usuario_actual: ID_ADMIN_ACTUAL, nombre_completo: nombre, correo, telefono, cedula, foto_perfil: null })
-    });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.message || 'Error al editar personal');
-    }
+  const editarPersonal = useCallback(async (id_usuario: number, nombre: string, correo: string, telefono: string, cedula: string, correoContacto?: string) => {
+    await api.put(`/personal/${id_usuario}`, { nombre_completo: nombre, correo, correo_contacto: correoContacto || null, telefono, cedula, foto_perfil: null });
     await recargarPersonal();
-  }, [recargarPersonal]);
+  }, [recargarPersonal, idAdminActual]);
 
   const cambiarEstadoPersonal = useCallback(async (id_usuario: number, activar: boolean) => {
     const accion = activar ? 'reactivar' : 'desactivar';
-    const res = await fetch(`${API_URL}/personal/${id_usuario}/${accion}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id_usuario_actual: ID_ADMIN_ACTUAL })
-    });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.message || 'Error al cambiar estado');
-    }
+    await api.patch(`/personal/${id_usuario}/${accion}`);
     await recargarPersonal();
-  }, [recargarPersonal]);
+  }, [recargarPersonal, idAdminActual]);
 
   // --- Residentes CRUD ---
   const recargarResidentes = useCallback(async () => {
+    if (!idAdminActual) return;
     try {
-      const res = await fetch(`${API_URL}/residentes?id_usuario_actual=${ID_ADMIN_ACTUAL}`);
-      const data = await res.json();
+      // El api client adjunta el Bearer token automáticamente y redirige a /login si expira.
+      const data = await api.get<ResidenteRaw[]>('/residentes');
 
-      if (!res.ok || !Array.isArray(data)) {
+      if (!Array.isArray(data)) {
         console.error('Error del backend al obtener residentes:', data);
         return;
       }
@@ -242,6 +268,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         departamento: row.departamento || 'Sin asignar',
         correo: row.correo,
         telefono: row.telefono,
+        cedula: row.cedula || '',
         contrato_estado: row.estado_contrato || 'Sin Contrato',
         estado: row.activo ? 'Activo' : 'Inactivo'
       }));
@@ -250,76 +277,79 @@ export function DataProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error('Error de red al recargar residentes:', err);
     }
-  }, []);
+  }, [idAdminActual]);
 
-  const crearResidente = useCallback(async (nombre: string, correo: string, telefono: string, cedula: string) => {
-    const res = await fetch(`${API_URL}/residentes`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id_usuario_actual: ID_ADMIN_ACTUAL,
-        nombre_completo: nombre,
-        correo,
-        contrasena_hash: 'temporal123',
-        telefono,
-        cedula
-      })
+  const crearResidente = useCallback(async (nombre: string, correo: string, contrasena: string, telefono: string, cedula: string) => {
+    // NOTA (cambio): la contraseña la escribe el admin en el formulario (nunca un
+    // valor fijo); el backend la hashea con bcrypt ANTES de guardarla.
+    // El id_usuario_actual ahora lo toma el backend del JWT (req.user).
+    await api.post('/residentes', {
+      nombre_completo: nombre,
+      correo,
+      contrasena,
+      telefono,
+      cedula
     });
 
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.message || 'Error al registrar residente');
-    }
-
     await recargarResidentes();
-  }, [recargarResidentes]);
+  }, [recargarResidentes, idAdminActual]);
 
   const editarResidente = useCallback(async (id_usuario: number, nombre: string, correo: string, telefono: string, cedula: string) => {
-    const res = await fetch(`${API_URL}/residentes/${id_usuario}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id_usuario_actual: ID_ADMIN_ACTUAL,
-        nombre_completo: nombre,
-        correo,
-        telefono,
-        cedula
-      })
+    await api.put(`/residentes/${id_usuario}`, {
+      nombre_completo: nombre,
+      correo,
+      telefono,
+      cedula
     });
 
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.message || 'Error al editar residente');
-    }
-
     await recargarResidentes();
-  }, [recargarResidentes]);
+  }, [recargarResidentes, idAdminActual]);
 
   const cambiarEstadoResidente = useCallback(async (id: number, activo: boolean) => {
-    const res = await fetch(`${API_URL}/residentes/${id}/changeEstadoResidente`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id_usuario_actual: ID_ADMIN_ACTUAL,
-        activo: activo ? 1 : 0
-      })
+    await api.patch(`/residentes/${id}/changeEstadoResidente`, {
+      activo: activo ? 1 : 0
     });
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ message: 'Error de servidor' }));
-      throw new Error(err.message || 'Error al cambiar estado');
-    }
-
     await recargarResidentes();
-  }, [recargarResidentes]);
+  }, [recargarResidentes, idAdminActual]);
+
+  // --- Departamentos CRUD ---
+  // NOTA: recargarDepartamentos se define ANTES de recargarContratos porque
+  // ese callback lo invoca para mantener los estados (Disponible/Ocupado) al
+  // día con el ciclo de vida del contrato.
+  const recargarDepartamentos = useCallback(async () => {
+    if (!idAdminActual) return;
+    try {
+      const data = await api.get<DepartamentoRaw[]>('/departamentos');
+
+      if (!Array.isArray(data)) {
+        console.error('Error del backend al obtener departamentos:', data);
+        return;
+      }
+
+      const transformed: Departamento[] = data.map((row: DepartamentoRaw) => ({
+        id_departamento: row.id_departamento,
+        numero: row.numero,
+        piso: row.piso ?? null,
+        metros_cuadrados: row.metros_cuadrados ?? null,
+        estado: row.estado,
+        activo: Boolean(row.activo)
+      }));
+
+      setDepartamentosData(transformed);
+    } catch (err) {
+      console.error('Error de red al recargar departamentos:', err);
+    }
+  }, [idAdminActual]);
 
   // --- Contratos CRUD ---
   const recargarContratos = useCallback(async () => {
+    if (!idAdminActual) return;
     try {
-      const res = await fetch(`${API_URL}/contratos?id_usuario_actual=${ID_ADMIN_ACTUAL}`);
-      const data = await res.json();
+      // El api client adjunta el Bearer token automáticamente y redirige a /login si expira.
+      const data = await api.get<ContratoRaw[]>('/contratos');
 
-      if (!res.ok || !Array.isArray(data)) {
+      if (!Array.isArray(data)) {
         console.error('Error del backend al obtener contratos:', data);
         return;
       }
@@ -332,95 +362,88 @@ export function DataProvider({ children }: { children: ReactNode }) {
         departamento: row.departamento,
         fecha_inicio: row.fecha_inicio?.split('T')[0] || row.fecha_inicio,
         fecha_fin: row.fecha_fin?.split('T')[0] || row.fecha_fin,
-        estado: row.estado
+        estado: row.estado,
+        // Montos: se rellenan con 0 si la vista aún no los expone.
+        monto_mensual: row.monto_mensual ?? 0,
+        monto_deposito: row.monto_deposito ?? 0
       }));
 
       setContratosData(transformed);
+
+      // Sincronización de departamentos: el ciclo de vida del contrato cambia
+      // el estado del departamento (Ocupado al crear, Disponible al finalizar
+      // por fecha_fin). Al recargar contratos se recargan también los
+      // departamentos para que el módulo quede al día SIN necesidad de
+      // refrescar la página.
+      await recargarDepartamentos();
     } catch (err) {
       console.error('Error de red al recargar contratos:', err);
     }
-  }, []);
+  }, [idAdminActual, recargarDepartamentos]);
 
   const crearContrato = useCallback(async (datos: {
-    id_usuario: number;
-    id_departamento: number;
+    cedula: string;
+    numero_departamento: string;
     fecha_inicio: string;
     fecha_fin: string;
     monto_mensual: number;
     monto_deposito: number;
-    observaciones?: string;
   }) => {
-    const res = await fetch(`${API_URL}/contratos`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id_usuario_actual: ID_ADMIN_ACTUAL,
-        ...datos
-      })
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ message: 'Error al crear contrato' }));
-      throw new Error(err.message || 'Error al crear contrato');
-    }
+    // El id_usuario_actual lo toma el backend del JWT (req.user); el SP
+    // sp_Contrato_Insertar busca al inquilino por CÉDULA y asigna el
+    // departamento por su NÚMERO (no por id).
+    await api.post('/contratos', datos);
 
     await recargarContratos();
     await recargarResidentes();
-  }, [recargarContratos, recargarResidentes]);
+  }, [recargarContratos, recargarResidentes, idAdminActual]);
 
   const editarContrato = useCallback(async (
     id_contrato: number,
     datos: {
-      id_departamento: number;
       fecha_inicio: string;
       fecha_fin: string;
       monto_mensual: number;
       monto_deposito: number;
-      observaciones?: string;
     }
   ) => {
-    const res = await fetch(`${API_URL}/contratos/${id_contrato}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id_usuario_actual: ID_ADMIN_ACTUAL,
-        ...datos
-      })
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ message: 'Error al actualizar contrato' }));
-      throw new Error(err.message || 'Error al actualizar contrato');
-    }
+    // NOTA: el departamento NO se edita en el contrato (se asigna solo al crear).
+    await api.put(`/contratos/${id_contrato}`, datos);
 
     await recargarContratos();
-  }, [recargarContratos]);
-
-  const finalizarContrato = useCallback(async (id_contrato: number) => {
-    const res = await fetch(`${API_URL}/contratos/${id_contrato}/finalizar`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id_usuario_actual: ID_ADMIN_ACTUAL
-      })
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ message: 'Error al finalizar contrato' }));
-      throw new Error(err.message || 'Error al finalizar contrato');
-    }
-
-    await recargarContratos();
+    // Recarga residentes también: si al recargar contratos la auto-finalización
+    // (fecha_fin vencida) cambió el contrato del inquilino, su estado_contrato
+    // en el módulo de residentes queda al día sin refrescar la página.
     await recargarResidentes();
-  }, [recargarContratos, recargarResidentes]);
+  }, [recargarContratos, recargarResidentes, idAdminActual]);
+
+  const crearDepartamento = useCallback(async (numero: string, piso: number | null, metrosCuadrados: number | null) => {
+    await api.post('/departamentos', { numero, piso, metros_cuadrados: metrosCuadrados });
+
+    await recargarDepartamentos();
+  }, [recargarDepartamentos, idAdminActual]);
+
+  const editarDepartamento = useCallback(async (id_departamento: number, numero: string, piso: number | null, metrosCuadrados: number | null) => {
+    await api.put(`/departamentos/${id_departamento}`, { numero, piso, metros_cuadrados: metrosCuadrados });
+
+    await recargarDepartamentos();
+  }, [recargarDepartamentos, idAdminActual]);
+
+  const cambiarEstadoDepartamento = useCallback(async (id_departamento: number, activar: boolean) => {
+    const accion = activar ? 'reactivar' : 'desactivar';
+    await api.patch(`/departamentos/${id_departamento}/${accion}`);
+
+    await recargarDepartamentos();
+  }, [recargarDepartamentos, idAdminActual]);
 
   // --- RESERVAS CONSULTA & CRUD ---
   const recargarReservas = useCallback(async () => {
+    if (!idAdminActual) return;
     try {
-      const res = await fetch(`${API_URL}/reservas?id_usuario_actual=${ID_ADMIN_ACTUAL}`);
-      const data = await res.json();
+      // El api client adjunta el Bearer token automáticamente y redirige a /login si expira.
+      const data = await api.get<ReservaRaw[]>('/reservas');
 
-      if (!res.ok || !Array.isArray(data)) {
+      if (!Array.isArray(data)) {
         console.error('Error del backend al obtener reservas:', data);
         setReservasData([]);
         return;
@@ -451,68 +474,40 @@ export function DataProvider({ children }: { children: ReactNode }) {
       console.error('Error de red al recargar reservas:', err);
       setReservasData([]);
     }
-  }, []);
+  }, [idAdminActual]);
 
   const crearReserva = useCallback(async (dto: CrearReservaDTO) => {
-    const res = await fetch(`${API_URL}/reservas`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id_usuario_actual: ID_ADMIN_ACTUAL,
-        ...dto
-      })
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ message: 'Error al crear reserva' }));
-      throw new Error(err.message || 'Error al crear la reserva');
-    }
+    // El id_usuario_actual ahora lo toma el backend del JWT (req.user).
+    await api.post('/reservas', dto);
 
     await recargarReservas();
-  }, [recargarReservas]);
+  }, [recargarReservas, idAdminActual]);
 
   const editarReserva = useCallback(async (id_reserva: number, dto: EditarReservaDTO) => {
-    const res = await fetch(`${API_URL}/reservas/${id_reserva}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id_usuario_actual: ID_ADMIN_ACTUAL,
-        ...dto
-      })
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ message: 'Error al actualizar reserva' }));
-      throw new Error(err.message || 'Error al actualizar la reserva');
-    }
+    await api.put(`/reservas/${id_reserva}`, dto);
 
     await recargarReservas();
-  }, [recargarReservas]);
+  }, [recargarReservas, idAdminActual]);
 
   const cancelarReserva = useCallback(async (id_reserva: number) => {
-    const res = await fetch(`${API_URL}/reservas/${id_reserva}/cancelar`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id_usuario_actual: ID_ADMIN_ACTUAL
-      })
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ message: 'Error al cancelar reserva' }));
-      throw new Error(err.message || 'Error al cancelar la reserva');
-    }
+    await api.patch(`/reservas/${id_reserva}/cancelar`);
 
     await recargarReservas();
-  }, [recargarReservas]);
+  }, [recargarReservas, idAdminActual]);
 
   // --- Carga Inicial ---
   useEffect(() => {
+    // No cargar datos hasta que la sesión esté restaurada Y el 2FA esté
+    // verificado: con el token temporal (2faVerified: false) el backend responde
+    // 403 "Se requiere la verificación 2FA". Al completar el 2FA, verificacion2FA
+    // cambia a true y el efecto se re-ejecuta con el token definitivo.
+    if (!usuario || !verificacion2FA) return;
     recargarPersonal();
     recargarResidentes();
     recargarContratos();
+    recargarDepartamentos();
     recargarReservas();
-  }, [recargarPersonal, recargarResidentes, recargarContratos, recargarReservas]);
+  }, [usuario, verificacion2FA, recargarPersonal, recargarResidentes, recargarContratos, recargarDepartamentos, recargarReservas]);
 
   // --- Helpers Notificaciones / Actividad ---
   const addActivity = useCallback((descripcion: string, icono = 'fa-circle', color = 'var(--accent)') => {
@@ -563,12 +558,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
   return (
     <DataContext.Provider value={{
       areasData, setAreasData,
-      personalData, setPersonalData,
-      residentesData, setResidentesData,
-      contratosData, setContratosData,
+      personalData,
+      residentesData,
+      contratosData,
+      departamentosData,
       pagosData,
-      reservasData: adminReservas, setReservasData,
-      visitas, setVisitas,
+      reservasData: adminReservas,
+      visitas,
       areasDisponiblesData,
       inquilinoReservasData, setInquilinoReservas,
       inquilinoVisitantesData, setInquilinoVisitantes,
@@ -578,7 +574,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       markAsRead, markAllRead,
       crearPersonal, editarPersonal, cambiarEstadoPersonal,
       crearResidente, editarResidente, cambiarEstadoResidente,
-      recargarContratos, crearContrato, editarContrato, finalizarContrato,
+      recargarContratos, crearContrato, editarContrato,
+      recargarDepartamentos, crearDepartamento, editarDepartamento, cambiarEstadoDepartamento,
       recargarReservas, crearReserva, editarReserva, cancelarReserva
     }}>
       {children}

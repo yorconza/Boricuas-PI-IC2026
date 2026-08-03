@@ -17,11 +17,13 @@
 
 import { useData } from '../../context/DataContext';
 import { useToast } from '../../components/Toast';
+import { useAlert } from '../../components/Alert';
 import { formatHoraAMPM } from '../../hooks/useLocalDate';
 
 export default function MisVisitantesPage() {
   const { inquilinoVisitantesData, setInquilinoVisitantes, addNotification } = useData();
   const { showToast } = useToast();
+  const { confirmar } = useAlert();
 
   const verDetalleVisitante = (id: number) => {
     const visitante = inquilinoVisitantesData.find(v => v.id === id);
@@ -61,18 +63,21 @@ export default function MisVisitantesPage() {
     document.getElementById('detalleVisitanteModal')?.classList.remove('open');
   };
 
-  const cancelarVisitante = (id: number) => {
+  const cancelarVisitante = async (id: number) => {
     const visitante = inquilinoVisitantesData.find(v => v.id === id);
     if (!visitante) return;
     if (visitante.estado !== 'Pendiente') {
       showToast('Este visitante ya no está pendiente.', 'error');
       return;
     }
-    if (confirm(`¿Cancelar la visita de ${visitante.nombre}?`)) {
-      setInquilinoVisitantes(prev => prev.map(v => v.id === id ? { ...v, estado: 'Cancelada' as const } : v));
-      showToast('Visita cancelada correctamente.', 'success');
-      addNotification('inquilino', 'Visita cancelada', `Cancelaste la visita de ${visitante.nombre}.`);
-    }
+    const confirmado = await confirmar(
+      `¿Cancelar la visita de ${visitante.nombre}?`,
+      { titulo: 'Cancelar visita', confirmarTexto: 'Sí, cancelar' }
+    );
+    if (!confirmado) return;
+    setInquilinoVisitantes(prev => prev.map(v => v.id === id ? { ...v, estado: 'Cancelada' as const } : v));
+    showToast('Visita cancelada correctamente.', 'success');
+    addNotification('inquilino', 'Visita cancelada', `Cancelaste la visita de ${visitante.nombre}.`);
   };
 
   return (

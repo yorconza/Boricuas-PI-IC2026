@@ -22,3 +22,12 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Archivos .env (contienen secretos como RESEND_API_KEY).
+# NOTA: backend/.env ya está versionado en git — para no subir secretos:
+#   git rm --cached backend/.env  (luego el archivo queda ignorado)
+.env
+backend/.env
+
+# Avatares subidos por los usuarios (no versionar imágenes locales)
+backend/uploads/

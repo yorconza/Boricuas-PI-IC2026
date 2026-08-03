@@ -76,6 +76,21 @@
 }
 
 /* ============================================================
+   MODAL DE DETALLE: botones de acción rectangulares
+   Sin la forma de "radio button" (pill) que trae .btn-sm base.
+   Se aplica solo a los botones Autorizar/Rechazar del modal de
+   detalle; las acciones de la tabla conservan su estilo propio.
+   ============================================================ */
+.modal .modal-actions .btn-sm {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    border-radius: 0;
+    padding: var(--space-2) var(--space-3);
+    font-size: 0.75rem;
+}
+
+/* ============================================================
    TABLA DE VISITAS: nombre destacado
    ============================================================ */
 .table-modern .nombre-visitante {
@@ -156,5 +171,10 @@
     }
     .kpi-card:nth-child(3) {
         grid-column: span 1;
+    }
+    /* Botones del modal de detalle a ancho completo (igual que "Cerrar") */
+    .modal .modal-actions .btn-sm {
+        width: 100%;
+        justify-content: center;
     }
 }

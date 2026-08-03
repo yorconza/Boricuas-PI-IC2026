@@ -19,7 +19,7 @@
 
 import { useState, useCallback, useEffect, type ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import Sidebar from '../../components/Sidebar';
 import Navbar from '../../components/Navbar';
 import ProfileDrawer from '../../components/ProfileDrawer';
@@ -48,7 +48,7 @@ const pageTitles: Record<string, string> = {
 };
 
 export default function InquilinoLayout({ children }: InquilinoLayoutProps) {
-  const { profile, updateProfile, logout } = useAuth();
+  const { profile, updateProfile, logout, usuario } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [showProfile, setShowProfile] = useState(false);
@@ -124,6 +124,7 @@ export default function InquilinoLayout({ children }: InquilinoLayoutProps) {
           profile={profile}
           onSave={updateProfile}
           onAvatarUpdate={handleAvatarUpdate}
+          role={usuario?.rol}
         />
       )}
     </>

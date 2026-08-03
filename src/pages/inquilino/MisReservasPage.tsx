@@ -23,6 +23,7 @@
 import { useData } from '../../context/DataContext';
 import { useToast } from '../../components/Toast';
 import { formatHoraAMPM } from '../../hooks/useLocalDate';
+import { formatearMoneda } from '../../utils/formatters';
 
 export default function MisReservasPage() {
   const { inquilinoReservasData, setInquilinoReservas, addNotification } = useData();
@@ -46,7 +47,7 @@ export default function MisReservasPage() {
       <div class="detail-row"><span class="detail-label">Fecha</span><span class="detail-value">${reserva.fecha}</span></div>
       <div class="detail-row"><span class="detail-label">Horario</span><span class="detail-value">${formatHoraAMPM(reserva.hora_inicio)} - ${formatHoraAMPM(reserva.hora_fin)}</span></div>
       <div class="detail-row"><span class="detail-label">Personas</span><span class="detail-value">${reserva.personas}</span></div>
-      <div class="detail-row"><span class="detail-label">Costo</span><span class="detail-value">₡${reserva.costo.toLocaleString()}</span></div>
+      <div class="detail-row"><span class="detail-label">Costo</span><span class="detail-value">${formatearMoneda(reserva.costo)}</span></div>
       <div class="detail-row"><span class="detail-label">Estado</span><span class="detail-value"><span class="badge ${estadoBadge}">${reserva.estado}</span></span></div>
       <div class="detail-row"><span class="detail-label">Pago</span><span class="detail-value"><span class="badge ${pagoBadge}">${reserva.pago_estado}</span></span></div>
     `;
