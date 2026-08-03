@@ -27,16 +27,17 @@ interface BadgeProps {
   className?: string;
 }
 
+// Mapa variante → clase CSS (reemplaza el switch; evita asignaciones muertas)
+const VARIANT_CLASSES: Record<string, string> = {
+  success: 'badge-success',
+  warning: 'badge-warning',
+  error: 'badge-error',
+  info: 'badge-info',
+  domain: 'badge-domain',
+  disabled: 'badge-disabled',
+};
+
 export default function Badge({ variant = 'default', children, className = '' }: BadgeProps) {
-  let variantClass = '';
-  switch (variant) {
-    case 'success': variantClass = 'badge-success'; break;
-    case 'warning': variantClass = 'badge-warning'; break;
-    case 'error': variantClass = 'badge-error'; break;
-    case 'info': variantClass = 'badge-info'; break;
-    case 'domain': variantClass = 'badge-domain'; break;
-    case 'disabled': variantClass = 'badge-disabled'; break;
-    default: variantClass = '';
-  }
+  const variantClass = VARIANT_CLASSES[variant] ?? '';
   return <span className={`badge ${variantClass} ${className}`.trim()}>{children}</span>;
 }

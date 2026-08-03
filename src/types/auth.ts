@@ -38,6 +38,9 @@ export interface Usuario {
   idRol: number;
   rol: RolNombre;
   activo: boolean;
+  /** URL completa del avatar (se persiste localmente para el Navbar) */
+  avatar?: string;
+  telefono?: string;
 }
 
 export interface Credenciales {
@@ -48,4 +51,5 @@ export interface Credenciales {
 export interface DatosRegistro extends Credenciales {
   nombreCompleto: string;
   telefono?: string;
+  cedula?: string;
 }

@@ -126,8 +126,10 @@ describe('ErrorBoundary', () => {
     expect(consoleErrorSpy).toHaveBeenCalled();
     // Verificar que se llamó con el mensaje del ErrorBoundary
     const llamadas = consoleErrorSpy.mock.calls;
+    // NOTA (cambio para compilar con `tsc -b`): se tipa el parámetro del callback
+    // como unknown[] para corregir TS7006 (parámetro con tipo `any` implícito).
     const hayMensajeBoundary = llamadas.some(
-      (args) => typeof args[0] === 'string' && args[0].includes('[ErrorBoundary]')
+      (args: unknown[]) => typeof args[0] === 'string' && String(args[0]).includes('[ErrorBoundary]')
     );
     expect(hayMensajeBoundary).toBe(true);
   });

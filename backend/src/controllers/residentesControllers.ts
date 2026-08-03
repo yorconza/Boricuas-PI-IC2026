@@ -1,15 +1,37 @@
 import { type Request, type Response } from 'express';
+import bcrypt from 'bcrypt';
 import { getConnection } from '../config/confDB.js';
 import sql from 'mssql';
+// Auto-finalización de contratos por fecha fin (ver services/contratoService.ts)
+import { finalizarContratosVencidos } from '../services/contratoService.js';
+
+// Rondas de bcrypt para el hash de contraseña (mismas que authController.register)
+const SALT_ROUNDS = 10;
 
 // 1. Listar residentes (GET)
 export const getResidentes = async (req: Request, res: Response) => {
     try {
         const { id_usuario_actual, id_usuario, nombre, departamento, estado_contrato, activo } = req.query;
 
+        // SEGURIDAD (cambio): con las rutas protegidas por JWT, el id_usuario_actual
+        // se toma del token firmado (req.user), NO del cliente. Así un atacante no
+        // puede suplantar a otro administrador inventando un id en el query.
+        // El fallback al query solo existe por compatibilidad con llamadas sin token.
+        const idActual = req.user?.id_usuario ?? (Number.isFinite(Number(id_usuario_actual)) ? Number(id_usuario_actual) : undefined);
+        if (!idActual) {
+            return res.status(400).json({ message: 'id_usuario_actual es obligatorio' });
+        }
+
         const pool = await getConnection();
+
+        // Auto-finalización de contratos: también se pone al día antes de listar
+        // residentes, porque este SP expone estado_contrato (la vista de residentes
+        // debe reflejar los contratos ya vencidos por fecha fin). El helper nunca
+        // lanza: si falla, el listado continúa (se corrige luego).
+        await finalizarContratosVencidos(pool, idActual);
+
         const result = await pool?.request()
-            .input('id_usuario_actual', sql.Int, Number(id_usuario_actual))
+            .input('id_usuario_actual', sql.Int, idActual)
             .input('id_usuario', sql.Int, id_usuario ? Number(id_usuario) : null)
             .input('nombre', sql.VarChar, nombre ? String(nombre) : null)
             .input('departamento', sql.VarChar, departamento ? String(departamento) : null)
@@ -28,17 +50,33 @@ export const getResidentes = async (req: Request, res: Response) => {
 // 2. Insertar nuevo residente (POST) - CORREGIDO PARA EL SP REAL
 export const createResidente = async (req: Request, res: Response) => {
     try {
-        const { id_usuario_actual, nombre_completo, correo, contrasena_hash, telefono, cedula, foto_perfil } = req.body;
+        const { id_usuario_actual, nombre_completo, correo, contrasena, contrasena_hash, telefono, cedula, foto_perfil } = req.body ?? {};
 
-        // Convertir el string de la contraseña a Buffer para que coincida con VARBINARY(256)
-        const passwordBuffer = Buffer.from(contrasena_hash || 'temporal123', 'utf-8');
+        // NOTA (cambio): la contraseña SIEMPRE la escribe el admin en el formulario
+        // (nunca un valor fijo) y se hashea con bcrypt ANTES de guardarla. Se mantiene
+        // `contrasena_hash` como respaldo para clientes antiguos que envían ese nombre.
+        const contrasenaPlana = contrasena || contrasena_hash;
+        if (!contrasenaPlana) {
+            return res.status(400).json({ message: 'La contraseña es obligatoria' });
+        }
+        const hashBcrypt = await bcrypt.hash(contrasenaPlana, SALT_ROUNDS);
+
+        // NOTA (cambio): el SP espera `@contrasena_hash VARCHAR(256)`, por lo que
+        // el hash bcrypt (string) se envía como VarChar y NO como VarBinary/Buffer
+        // (antes se enviaba VARBINARY(256), lo que causaba error de conversión).
+        // SEGURIDAD (cambio): el id se toma del JWT (req.user); el fallback al
+        // body solo existe por compatibilidad con llamadas sin token.
+        const idActual = req.user?.id_usuario ?? (Number.isFinite(Number(id_usuario_actual)) ? Number(id_usuario_actual) : undefined);
+        if (!idActual) {
+            return res.status(400).json({ message: 'id_usuario_actual es obligatorio' });
+        }
 
         const pool = await getConnection();
         const result = await pool?.request()
-            .input('id_usuario_actual', sql.Int, Number(id_usuario_actual) || 1003)
+            .input('id_usuario_actual', sql.Int, idActual)
             .input('nombre_completo', sql.VarChar(150), nombre_completo)
             .input('correo', sql.VarChar(150), correo)
-            .input('contrasena_hash', sql.VarBinary(256), passwordBuffer)
+            .input('contrasena_hash', sql.VarChar(256), hashBcrypt) // SP usa VARCHAR(256)
             .input('telefono', sql.VarChar(20), telefono || null)
             .input('cedula', sql.VarChar(30), cedula || null)
             .input('foto_perfil', sql.VarChar(255), foto_perfil || null)
@@ -61,11 +99,20 @@ export const createResidente = async (req: Request, res: Response) => {
 export const updateResidente = async (req: Request, res: Response) => {
     try {
         const { id } = req.params; // ID del residente a modificar por la URL
-        const { id_usuario_actual, nombre_completo, correo, telefono, cedula, foto_perfil } = req.body;
+        const { id_usuario_actual, nombre_completo, correo, telefono, cedula, foto_perfil } = req.body ?? {};
+
+        // SEGURIDAD (cambio): con las rutas protegidas por JWT, el id_usuario_actual
+        // se toma del token firmado (req.user), NO del cliente. Así un atacante no
+        // puede suplantar a otro administrador inventando un id en el body.
+        // El fallback al body solo existe por compatibilidad con llamadas sin token.
+        const idActual = req.user?.id_usuario ?? (Number.isFinite(Number(id_usuario_actual)) ? Number(id_usuario_actual) : undefined);
+        if (!idActual) {
+            return res.status(400).json({ message: 'id_usuario_actual es obligatorio' });
+        }
 
         const pool = await getConnection();
         await pool?.request()
-            .input('id_usuario_actual', sql.Int, id_usuario_actual)
+            .input('id_usuario_actual', sql.Int, idActual)
             .input('id_usuario', sql.Int, Number(id))
             .input('nombre_completo', sql.VarChar, nombre_completo)
             .input('correo', sql.VarChar, correo)
@@ -86,17 +133,28 @@ export const updateResidente = async (req: Request, res: Response) => {
 export const changeEstadoResidente = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const { id_usuario_actual } = req.body;
+        // NOTA (cambio): `req.body ?? {}` — en Express 5, req.body es undefined
+        // cuando la petición no envía cuerpo; aquí se usa defensivamente.
+        const { id_usuario_actual, activo } = req.body ?? {};
         
         // Si no viene "activo" en el body, lo deducimos por el endpoint de la URL
-        let estadoActivo = req.body.activo;
+        let estadoActivo = activo;
         if (estadoActivo === undefined) {
             estadoActivo = req.path.endsWith('/reactivar');
         }
 
+        // SEGURIDAD (cambio): con las rutas protegidas por JWT, el id_usuario_actual
+        // se toma del token firmado (req.user), NO del cliente. Así un atacante no
+        // puede suplantar a otro administrador inventando un id en el body.
+        // El fallback al body solo existe por compatibilidad con llamadas sin token.
+        const idActual = req.user?.id_usuario ?? (Number.isFinite(Number(id_usuario_actual)) ? Number(id_usuario_actual) : undefined);
+        if (!idActual) {
+            return res.status(400).json({ message: 'id_usuario_actual es obligatorio' });
+        }
+
         const pool = await getConnection();
         await pool?.request()
-            .input('id_usuario_actual', sql.Int, id_usuario_actual)
+            .input('id_usuario_actual', sql.Int, idActual)
             .input('id_usuario', sql.Int, Number(id))
             .input('activo', sql.Bit, estadoActivo ? 1 : 0)
             .execute('sp_Residente_CambiarEstado');

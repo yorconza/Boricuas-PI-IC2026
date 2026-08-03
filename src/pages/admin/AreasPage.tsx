@@ -29,15 +29,19 @@ import Drawer from '../../components/Drawer';
 import Modal from '../../components/Modal';
 import { useData } from '../../context/DataContext';
 import { formatHora } from '../../hooks/useLocalDate';
+import { useAlert } from '../../components/Alert';
 
 export default function AreasPage() {
   const { areasData, setAreasData, addActivity, addNotification } = useData();
+  const { showAlert } = useAlert();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState<'create' | 'edit'>('create');
   const [disableModalOpen, setDisableModalOpen] = useState(false);
   const [disableAreaId, setDisableAreaId] = useState<number | null>(null);
 
-  const openDrawer = (mode: 'create' | 'edit', _id?: number) => {
+  // NOTA (limpieza): el modo 'edit' lee los valores del DOM por nombre del área,
+  // por eso el parámetro _id no se usaba (código muerto) y se eliminó.
+  const openDrawer = (mode: 'create' | 'edit') => {
     setDrawerMode(mode);
     setDrawerOpen(true);
   };
@@ -106,7 +110,7 @@ export default function AreasPage() {
     }
 
     setDrawerOpen(false);
-    alert('Área guardada correctamente.');
+    showAlert('Área guardada correctamente.', { titulo: 'Éxito', tipo: 'success' });
   };
 
   const openDisableModal = (id: number) => {
@@ -153,7 +157,7 @@ export default function AreasPage() {
                   <p>Costo: {area.costo}</p>
                   <p><span className={`badge ${badgeClass}`}>{badgeText}</span></p>
                   <div className="area-actions">
-                    <a onClick={() => openDrawer('edit', area.id)}><i className="fas fa-edit"></i> Editar</a>
+                    <a onClick={() => openDrawer('edit')}><i className="fas fa-edit"></i> Editar</a>
                     {!isDisabled && (
                       <a className="btn-danger" onClick={() => openDisableModal(area.id)}>
                         <i className="fas fa-pause"></i> Deshabilitar
@@ -190,7 +194,7 @@ export default function AreasPage() {
               </select>
             </div>
           </div>
-          <div className="form-group"><label>Costo</label><input type="text" placeholder="Costo (ej: $20/h)" /></div>
+          <div className="form-group"><label>Costo</label><input type="text" placeholder="Costo (ej: ₡20/h)" /></div>
           <div className="form-group">
             <label>Estado</label>
             <select>

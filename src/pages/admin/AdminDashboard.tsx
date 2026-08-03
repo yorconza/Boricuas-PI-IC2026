@@ -13,16 +13,20 @@ interface AdminDashboardProps {
 
 export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
   // 1. Asignamos valores por defecto (Arrays vacíos) por si el Context falla o viene undefined
+  // NOTA (cambio para compilar con `tsc -b`): DataContext expone las reservas
+  // del admin como `reservasData` (la variable interna se llama `adminReservas`,
+  // pero NO forma parte de `DataContextType`). Se usa `reservasData` para
+  // corregir TS2339 (la propiedad `adminReservas` no existe en el tipo del contexto).
   const { 
-    adminReservas = [], 
+    reservasData = [], 
     activityLog = [], 
     alertas = [] 
   } = useData() || {};
 
   const today = getLocalDateString();
 
-  // 2. Evaluamos (adminReservas || []) antes del .filter() para garantizar la inmunidad ante undefined
-  const reservasHoy = (adminReservas || []).filter(
+  // 2. Evaluamos (reservasData || []) antes del .filter() para garantizar la inmunidad ante undefined
+  const reservasHoy = (reservasData || []).filter(
     r => r?.fecha === today && r?.estado !== 'Cancelada'
   );
 
@@ -54,7 +58,7 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
         <div className="kpi-card" onClick={() => onNavigate('pagos')} tabIndex={0} role="button">
           <div className="kpi-icon"><i className="fas fa-coins"></i></div>
           <div className="kpi-label">Ingresos del día</div>
-          <div className="kpi-value">$1,280</div>
+          <div className="kpi-value">₡1.280</div>
         </div>
       </div>
 

@@ -14,6 +14,11 @@ const dbSettings: sql.config = {
     options: {
         encrypt: false, // Cambiar a true si usas Azure
         trustServerCertificate: true // Necesario para entornos de desarrollo locales con certificados autofirmados
+    },
+    pool: {
+        // Una sola conexión física: garantiza que SET CONTEXT_INFO (auditoría del
+        // módulo de autenticación) persista en todas las consultas de la misma petición.
+        max: 1
     }
 };
 

@@ -23,29 +23,37 @@
 }
 
 /* ============================================================
-   BOTÓN "HABILITAR" (heredado, ya no se usa en tarjetas de área,
-   se conserva por si se reutiliza en otra parte del panel)
+   BOTÓN "HABILITAR" — usado en los modales de confirmación de
+   Personal y Residentes. Misma estructura que btn-danger pero en
+   verde: transparente por defecto y se pinta de verde en hover.
    ============================================================ */
 .btn-enable {
     display: inline-flex;
     align-items: center;
     gap: var(--space-1);
-    padding: var(--space-1) var(--space-2);
-    background: var(--success);
+    padding: var(--space-2) var(--space-4);
+    background: transparent;
     border: 1px solid transparent;
-    border-radius: var(--radius-sm);
-    color: #fff;
+    color: var(--text-secondary);
     font-family: "Inter", sans-serif;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
     text-decoration: none;
     cursor: pointer;
     transition: background var(--transition-smooth), color var(--transition-smooth),
-        transform var(--transition-smooth);
+        border-color var(--transition-smooth), transform var(--transition-smooth);
 }
 .btn-enable:hover {
-    background: #2ab07a;
+    background: var(--success);
+    color: #fff;
+    border-color: var(--success);
     transform: translateY(-2px);
+}
+.btn-enable:focus-visible {
+    outline: 3px solid var(--success);
+    outline-offset: 2px;
 }
 
 /* ============================================================

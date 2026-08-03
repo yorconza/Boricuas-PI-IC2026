@@ -18,18 +18,20 @@
 import { useState } from 'react';
 import PageHeader from '../../components/PageHeader';
 import Drawer from '../../components/Drawer';
+import { useAlert } from '../../components/Alert';
 
 export default function ReportesPage() {
+  const { showAlert } = useAlert();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerTitle, setDrawerTitle] = useState('');
   const [drawerBody, setDrawerBody] = useState<React.ReactNode>(null);
   const [drawerFooter, setDrawerFooter] = useState<React.ReactNode>(null);
-  const [reportType, setReportType] = useState('');
+  // NOTA (cambio para compilar con `tsc -b`): se eliminó el estado `reportType`
+  // porque solo se escribía (setReportType) pero nunca se leía (TS6133).
 
   const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
   const generarReporte = (tipo: string) => {
-    setReportType(tipo);
     setDrawerTitle(`Reporte de ${capitalize(tipo)}`);
     setDrawerBody(
       <div className="form-section">
@@ -59,11 +61,11 @@ export default function ReportesPage() {
     const fechaFin = (document.getElementById('reporteFechaFin') as HTMLInputElement)?.value;
 
     if (!fechaInicio || !fechaFin) {
-      alert('Selecciona la fecha de inicio y la fecha de fin para el reporte.');
+      showAlert('Selecciona la fecha de inicio y la fecha de fin para el reporte.');
       return;
     }
     if (fechaInicio > fechaFin) {
-      alert('La fecha de inicio no puede ser posterior a la fecha de fin.');
+      showAlert('La fecha de inicio no puede ser posterior a la fecha de fin.');
       return;
     }
 
@@ -80,7 +82,7 @@ export default function ReportesPage() {
     );
     setDrawerFooter(
       <div style={{ display: 'flex', gap: 'var(--space-2)', width: '100%', justifyContent: 'center' }}>
-        <button className="btn-primary" onClick={() => alert('Descargando...')}>
+        <button className="btn-primary" onClick={() => showAlert('Descargando...')}>
           <i className="fas fa-download"></i> Descargar
         </button>
         <button className="btn-secondary" onClick={() => setDrawerOpen(false)}>
