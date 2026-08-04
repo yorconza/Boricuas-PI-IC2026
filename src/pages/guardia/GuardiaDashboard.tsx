@@ -44,6 +44,13 @@ export default function GuardiaDashboard() {
   }, []);
 
   useEffect(() => {
+    // Carga inicial del dashboard al montar: cargarDatos activa el indicador
+    // de carga (setLoading(true)) al arrancar el fetch y actualiza el resto
+    // del estado en continuaciones asíncronas (después del await). El patrón
+    // de fetch al montar es intencional; la regla
+    // react-hooks/set-state-in-effect lo marca por ser una llamada desde un
+    // efecto, por lo que se suprime con justificación.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     cargarDatos();
   }, [cargarDatos]);
 

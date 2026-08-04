@@ -58,6 +58,13 @@ const navGroups = [
     ]
   },
   {
+    // Módulo de auditoría: con título propio para separarlo del resto.
+    label: 'Bitácora',
+    items: [
+      { href: '#bitacora', label: 'Bitácora', icon: 'fa-book', page: 'bitacora' },
+    ]
+  },
+  {
     label: 'Sistema',
     items: [
       { href: '#configuracion', label: 'Configuración', icon: 'fa-cog', page: 'configuracion' },
@@ -77,6 +84,7 @@ const pageTitles: Record<string, string> = {
   departamentos: 'Departamentos',
   pagos: 'Pagos',
   reportes: 'Reportes',
+  bitacora: 'Bitácora',
   configuracion: 'Configuración'
 };
 

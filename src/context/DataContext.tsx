@@ -237,18 +237,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
     // correo_contacto: correo real donde Admin/Guarda reciben el código 2FA.
     await api.post('/personal', { nombre_completo: nombre, correo, correo_contacto: correoContacto || null, contrasena, telefono, cedula, foto_perfil: null });
     await recargarPersonal();
-  }, [recargarPersonal, idAdminActual]);
+  }, [recargarPersonal]);
 
   const editarPersonal = useCallback(async (id_usuario: number, nombre: string, correo: string, telefono: string, cedula: string, correoContacto?: string) => {
     await api.put(`/personal/${id_usuario}`, { nombre_completo: nombre, correo, correo_contacto: correoContacto || null, telefono, cedula, foto_perfil: null });
     await recargarPersonal();
-  }, [recargarPersonal, idAdminActual]);
+  }, [recargarPersonal]);
 
   const cambiarEstadoPersonal = useCallback(async (id_usuario: number, activar: boolean) => {
     const accion = activar ? 'reactivar' : 'desactivar';
     await api.patch(`/personal/${id_usuario}/${accion}`);
     await recargarPersonal();
-  }, [recargarPersonal, idAdminActual]);
+  }, [recargarPersonal]);
 
   // --- Residentes CRUD ---
   const recargarResidentes = useCallback(async () => {
@@ -292,7 +292,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     });
 
     await recargarResidentes();
-  }, [recargarResidentes, idAdminActual]);
+  }, [recargarResidentes]);
 
   const editarResidente = useCallback(async (id_usuario: number, nombre: string, correo: string, telefono: string, cedula: string) => {
     await api.put(`/residentes/${id_usuario}`, {
@@ -303,7 +303,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     });
 
     await recargarResidentes();
-  }, [recargarResidentes, idAdminActual]);
+  }, [recargarResidentes]);
 
   const cambiarEstadoResidente = useCallback(async (id: number, activo: boolean) => {
     await api.patch(`/residentes/${id}/changeEstadoResidente`, {
@@ -311,7 +311,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     });
 
     await recargarResidentes();
-  }, [recargarResidentes, idAdminActual]);
+  }, [recargarResidentes]);
 
   // --- Departamentos CRUD ---
   // NOTA: recargarDepartamentos se define ANTES de recargarContratos porque
@@ -396,7 +396,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     await recargarContratos();
     await recargarResidentes();
-  }, [recargarContratos, recargarResidentes, idAdminActual]);
+  }, [recargarContratos, recargarResidentes]);
 
   const editarContrato = useCallback(async (
     id_contrato: number,
@@ -415,26 +415,26 @@ export function DataProvider({ children }: { children: ReactNode }) {
     // (fecha_fin vencida) cambió el contrato del inquilino, su estado_contrato
     // en el módulo de residentes queda al día sin refrescar la página.
     await recargarResidentes();
-  }, [recargarContratos, recargarResidentes, idAdminActual]);
+  }, [recargarContratos, recargarResidentes]);
 
   const crearDepartamento = useCallback(async (numero: string, piso: number | null, metrosCuadrados: number | null) => {
     await api.post('/departamentos', { numero, piso, metros_cuadrados: metrosCuadrados });
 
     await recargarDepartamentos();
-  }, [recargarDepartamentos, idAdminActual]);
+  }, [recargarDepartamentos]);
 
   const editarDepartamento = useCallback(async (id_departamento: number, numero: string, piso: number | null, metrosCuadrados: number | null) => {
     await api.put(`/departamentos/${id_departamento}`, { numero, piso, metros_cuadrados: metrosCuadrados });
 
     await recargarDepartamentos();
-  }, [recargarDepartamentos, idAdminActual]);
+  }, [recargarDepartamentos]);
 
   const cambiarEstadoDepartamento = useCallback(async (id_departamento: number, activar: boolean) => {
     const accion = activar ? 'reactivar' : 'desactivar';
     await api.patch(`/departamentos/${id_departamento}/${accion}`);
 
     await recargarDepartamentos();
-  }, [recargarDepartamentos, idAdminActual]);
+  }, [recargarDepartamentos]);
 
   // --- RESERVAS CONSULTA & CRUD ---
   const recargarReservas = useCallback(async () => {
@@ -481,19 +481,19 @@ export function DataProvider({ children }: { children: ReactNode }) {
     await api.post('/reservas', dto);
 
     await recargarReservas();
-  }, [recargarReservas, idAdminActual]);
+  }, [recargarReservas]);
 
   const editarReserva = useCallback(async (id_reserva: number, dto: EditarReservaDTO) => {
     await api.put(`/reservas/${id_reserva}`, dto);
 
     await recargarReservas();
-  }, [recargarReservas, idAdminActual]);
+  }, [recargarReservas]);
 
   const cancelarReserva = useCallback(async (id_reserva: number) => {
     await api.patch(`/reservas/${id_reserva}/cancelar`);
 
     await recargarReservas();
-  }, [recargarReservas, idAdminActual]);
+  }, [recargarReservas]);
 
   // --- Carga Inicial ---
   useEffect(() => {
@@ -502,11 +502,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
     // 403 "Se requiere la verificación 2FA". Al completar el 2FA, verificacion2FA
     // cambia a true y el efecto se re-ejecuta con el token definitivo.
     if (!usuario || !verificacion2FA) return;
+
+    // La carga inicial de datos al montar el provider es intencional: los
+    // recargar* solo actualizan el estado en continuaciones asíncronas
+    // (después del await de la API), nunca de forma síncrona en el efecto.
+    // La regla react-hooks/set-state-in-effect es conservadora y la marca.
+    /* eslint-disable react-hooks/set-state-in-effect */
     recargarPersonal();
     recargarResidentes();
     recargarContratos();
     recargarDepartamentos();
     recargarReservas();
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [usuario, verificacion2FA, recargarPersonal, recargarResidentes, recargarContratos, recargarDepartamentos, recargarReservas]);
 
   // --- Helpers Notificaciones / Actividad ---

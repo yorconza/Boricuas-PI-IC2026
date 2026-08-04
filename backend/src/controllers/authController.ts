@@ -219,6 +219,9 @@ export const login = async (req: Request, res: Response) => {
             id_usuario: Number(row.id_usuario),
             id_rol: Number(row.id_rol),
             nombre_rol: String(row.nombre_rol),
+            // Nombre completo del usuario: lo usa el correo 2FA en el saludo
+            // ("Hola, <nombre>") y getMe. Antes el saludo mostraba el rol.
+            nombre_completo: String(row.nombre_completo),
             id_sesion: Number(id_sesion),
             correo: String(row.correo),
             '2faVerified': false,
@@ -406,7 +409,7 @@ export const send2FACode = async (req: Request, res: Response) => {
         //    falla, se invalida el código recién insertado y se responde 502: el
         //    usuario NO debe quedar con un código activo que nunca recibió.
         try {
-            await enviarCodigo2FA({ destino, nombre: user.nombre_rol, codigo });
+            await enviarCodigo2FA({ destino, nombre: user.nombre_completo ?? 'usuario', codigo });
         } catch (mailError) {
             console.error('No se pudo enviar el correo 2FA:', mailError);
             await pool.request()
@@ -502,6 +505,7 @@ export const verify2FACode = async (req: Request, res: Response) => {
             id_usuario: user.id_usuario,
             id_rol: user.id_rol,
             nombre_rol: user.nombre_rol,
+            nombre_completo: user.nombre_completo,
             id_sesion: user.id_sesion,
             correo: user.correo,
             '2faVerified': true,

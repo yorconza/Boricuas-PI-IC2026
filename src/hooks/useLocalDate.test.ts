@@ -147,21 +147,57 @@ describe('getGreeting', () => {
     vi.useRealTimers();
   });
 
-  it('debe retornar "Buenos días" entre las 6:00 y las 11:59', () => {
+  it('debe retornar "Buenos días" de 12:00 a. m. a 11:59 a. m.', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 6, 22, 8, 0, 0));
     expect(getGreeting()).toBe('Buenos días');
   });
 
-  it('debe retornar "Buenas tardes" entre las 12:00 y las 18:59', () => {
+  it('debe retornar "Buenos días" exactamente a las 12:00 a. m. (medianoche)', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 22, 0, 0, 0));
+    expect(getGreeting()).toBe('Buenos días');
+  });
+
+  it('debe retornar "Buenos días" a las 11:00 a. m. (última hora del rango)', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 22, 11, 0, 0));
+    expect(getGreeting()).toBe('Buenos días');
+  });
+
+  it('debe retornar "Buenas tardes" de 12:00 p. m. a 6:59 p. m.', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 6, 22, 15, 0, 0));
     expect(getGreeting()).toBe('Buenas tardes');
   });
 
-  it('debe retornar "Buenas noches" entre las 19:00 y las 5:59', () => {
+  it('debe retornar "Buenas tardes" exactamente a las 12:00 p. m. (mediodía)', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 22, 12, 0, 0));
+    expect(getGreeting()).toBe('Buenas tardes');
+  });
+
+  it('debe retornar "Buenas tardes" a las 6:00 p. m. (última hora del rango)', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 22, 18, 0, 0));
+    expect(getGreeting()).toBe('Buenas tardes');
+  });
+
+  it('debe retornar "Buenas noches" de 7:00 p. m. a 11:59 p. m.', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 6, 22, 22, 0, 0));
+    expect(getGreeting()).toBe('Buenas noches');
+  });
+
+  it('debe retornar "Buenas noches" a las 7:00 p. m. (primera hora del rango)', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 22, 19, 0, 0));
+    expect(getGreeting()).toBe('Buenas noches');
+  });
+
+  it('debe retornar "Buenas noches" a las 11:00 p. m. (última hora del rango)', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 22, 23, 0, 0));
     expect(getGreeting()).toBe('Buenas noches');
   });
 });
