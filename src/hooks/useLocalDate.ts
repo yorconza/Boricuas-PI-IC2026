@@ -70,7 +70,10 @@ export function getTimeAgo(timestamp: number): string {
 
 export function getGreeting(): string {
   const hour = new Date().getHours();
-  if (hour >= 6 && hour < 12) return 'Buenos días';
+  // 12:00 a. m. – 11:59 a. m. → Buenos días
+  if (hour >= 0 && hour < 12) return 'Buenos días';
+  // 12:00 p. m. – 6:59 p. m. → Buenas tardes
   if (hour >= 12 && hour < 19) return 'Buenas tardes';
+  // 7:00 p. m. – 11:59 p. m. → Buenas noches
   return 'Buenas noches';
 }

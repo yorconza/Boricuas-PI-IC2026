@@ -102,11 +102,19 @@ export default function GuardiaVisitas() {
 
   // Carga inicial de la pestaña activa + cada vez que cambian los filtros
   useEffect(() => {
+    // Los cargar* activan su indicador de carga (setLoadingX(true)) al
+    // arrancar el fetch y actualizan el resto del estado en continuaciones
+    // asíncronas (después del await). El patrón de carga al montar/cambiar
+    // filtros es intencional; la regla react-hooks/set-state-in-effect lo
+    // marca por ser una llamada desde un efecto, por lo que se suprime con
+    // justificación.
+    /* eslint-disable react-hooks/set-state-in-effect */
     if (currentTab === 'esperadas') {
       cargarEsperadas(debouncedSearch);
     } else {
       cargarHistorial(debouncedSearch, filterEstado);
     }
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [currentTab, debouncedSearch, filterEstado, cargarEsperadas, cargarHistorial]);
 
   // Refresca solo la lista de la pestaña activa tras autorizar/rechazar

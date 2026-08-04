@@ -12,6 +12,7 @@ import authRoutes from './src/routes/authRoutes.js';
 import guardRoute from './src/routes/guardRoute.js';
 import perfilRoute from './src/routes/perfilRoute.js';
 import departamentoRoute from './src/routes/departamentoRoute.js';
+import bitacoraRoute from './src/routes/bitacoraRoute.js';
 dotenv.config();
 
 // __dirname en ESM (el backend usa "type": "module")
@@ -57,6 +58,8 @@ app.use('/api/auth', authRoutes)
 app.use('/api/guard', guardRoute)
 app.use('/api/perfil', perfilRoute)
 app.use('/api/departamentos', departamentoRoute)
+// Módulo de Bitácora (auditoría): GET /api/bitacora, solo rol Administrador
+app.use('/api/bitacora', bitacoraRoute)
 
 
 // Iniciar el servidor

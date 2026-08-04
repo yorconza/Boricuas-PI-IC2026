@@ -173,6 +173,41 @@ export interface Contrato {
   monto_deposito?: number;
 }
 
+/**
+ * Registro de auditoría devuelto por GET /api/bitacora (sp_ObtenerBitacora).
+ * `usuario_nombre`/`usuario_rol` son NULL cuando el evento lo generó el sistema
+ * (ej: LOGOUT/EXPIRADA) y `dato_anterior`/`dato_nuevo` son JSON en texto.
+ */
+export interface BitacoraRegistro {
+  id_bitacora: number;
+  /** Fecha/hora del evento (la BD la devuelve como Date; la UI la formatea local). */
+  fecha_evento: string;
+  /** INSERT | UPDATE | DELETE | LOGIN | LOGOUT | EXPIRADA */
+  operacion: string;
+  /** Nombre técnico de la tabla afectada (ej: 'Reserva'). */
+  tabla_afectada: string;
+  descripcion: string | null;
+  ip_origen: string | null;
+  /** JSON en texto con el estado anterior (NULL en INSERT) o null si no aplica. */
+  dato_anterior: string | null;
+  /** JSON en texto con el estado nuevo (NULL en DELETE) o null si no aplica. */
+  dato_nuevo: string | null;
+  id_usuario: number | null;
+  /** Nombre completo del usuario o NULL → 'Sistema'. */
+  usuario_nombre: string | null;
+  /** Administrador | Guarda | Inquilino | null */
+  usuario_rol: string | null;
+}
+
+/** Respuesta paginada de GET /api/bitacora. */
+export interface BitacoraResponse {
+  pagina: number;
+  limite: number;
+  totalRegistros: number;
+  totalPaginas: number;
+  datos: BitacoraRegistro[];
+}
+
 export interface Pago {
   id: number;
   residente: string;
@@ -233,7 +268,7 @@ export type PageId =
   // Admin
   | 'dashboard' | 'actividad' | 'personal' | 'residentes'
   | 'departamentos' | 'areas' | 'reservas' | 'empresas'
-  | 'contratos' | 'pagos' | 'reportes' | 'configuracion'
+  | 'contratos' | 'pagos' | 'reportes' | 'bitacora' | 'configuracion'
   // Guardia
   | 'visitas'
   // Inquilino

@@ -42,6 +42,8 @@ export interface AuthUser {
     id_usuario: number;
     id_rol: number;
     nombre_rol: string;
+    /** Nombre completo del usuario (lo usa el saludo del correo 2FA). */
+    nombre_completo?: string;
     id_sesion: number;
     /** true solo si el JWT fue emitido después de verificar el código 2FA */
     // NOTA: la propiedad se declara entre comillas porque comienza con dígito.
@@ -108,6 +110,9 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
             id_sesion: Number(payload.id_sesion),
             '2faVerified': payload['2faVerified'] === true,
         };
+        if (typeof payload.nombre_completo === 'string' && payload.nombre_completo) {
+            req.user.nombre_completo = payload.nombre_completo;
+        }
         if (typeof payload.correo === 'string' && payload.correo) {
             req.user.correo = payload.correo;
         }

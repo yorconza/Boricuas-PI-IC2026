@@ -68,6 +68,7 @@ import DepartamentosPage from './pages/admin/DepartamentosPage';
 import VisitasPage from './pages/admin/VisitasPage';
 import PagosPage from './pages/admin/PagosPage';
 import ReportesPage from './pages/admin/ReportesPage';
+import BitacoraPage from './pages/admin/BitacoraPage';
 import ConfigPage from './pages/admin/ConfigPage';
 import GuardiaLayout from './pages/guardia/GuardiaLayout';
 import GuardiaDashboard from './pages/guardia/GuardiaDashboard';
@@ -142,6 +143,8 @@ function AdminRouter() {
       case 'empresas': return <VisitasPage />;
       case 'pagos': return <PagosPage />;
       case 'reportes': return <ReportesPage />;
+      // Módulo de auditoría (Bitácora)
+      case 'bitacora': return <BitacoraPage />;
       case 'configuracion': return <ConfigPage />;
       default: return <AdminDashboard onNavigate={onNavigate} />;
     }

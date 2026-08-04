@@ -25,6 +25,7 @@
  */
 
 import NotificationDropdown from './NotificationDropdown';
+import { getGreeting } from '../hooks/useLocalDate';
 import type { ProfileData, UserRole } from '../types';
 
 interface NavbarProps {
@@ -53,7 +54,7 @@ export default function Navbar({
       </div>
       <div className="navbar-right">
         <span className="greeting" id="greetingMessage">
-          Buenos días, <span id="nombreSaludo">{profile.nombre}</span>
+          {getGreeting()}, <span id="nombreSaludo">{profile.nombre}</span>
         </span>
         <NotificationDropdown role={role} />
         <div className="avatar-wrapper" id="avatarWrapper">
