@@ -31,7 +31,9 @@ interface AdminDashboardProps {
 export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
   const { adminReservas, activityLog, alertas } = useData();
   const today = getLocalDateString();
-  const reservasHoy = adminReservas.filter(r => r.fecha === today && r.estado !== 'Cancelada');
+  const reservasHoy = Array.isArray(adminReservas)
+  ? adminReservas.filter(r => r.fecha === today && r.estado !== 'Cancelada')
+  : [];
 
   return (
     <>

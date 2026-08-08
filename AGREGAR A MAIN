@@ -1,0 +1,16 @@
+Para agregar al main del proyecto; 
+En el backend:
+- Agregar el areasController a la carpeta de controllers
+- Agregar el areaRoute a la carpeta de routes
+-En server.ts hacer el import y el app.use
+
+
+
+En el front:
+- Reemplazar el codigo de pages/admin/AreasPage.tsx por el de este proyecto
+- crear un nuevo servicio en src/services que se llame areaServices.ts y pegar el copdigo que tiene este proyecto 
+
+HACER ESO PARA areascomunes, dashboard de visitantes, y realizar pagos 
+Agregar reportes
+
+Recuerde que en los codigos de la base de datos deben reemplzar el file de VISTAS y SP areas por el nuevo, NO CAMBIE NADA DE LOS DEMAS SCRIPTS SOLO EL de VISTAS y SP areas 
