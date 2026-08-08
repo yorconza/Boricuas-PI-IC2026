@@ -38,6 +38,8 @@ import {
 } from '../data/sampleData';
 import { useAuth } from '../hooks/useAuth';
 import { api } from '../services/apiClient';
+import { inquilinoService, type AreaInquilinoRaw } from '../services/inquilinoService';
+import { toDateOnly, toTimeOnly } from '../hooks/useLocalDate';
 
 interface PersonalRaw {
   id_usuario: number;
@@ -127,10 +129,13 @@ interface DataContextType {
   reservasData: Reserva[];
   visitas: Visitante[];
   areasDisponiblesData: AreaInquilino[];
+  recargarAreasDisponibles: () => Promise<void>;
   inquilinoReservasData: Reserva[];
   setInquilinoReservas: React.Dispatch<React.SetStateAction<Reserva[]>>;
+  recargarReservasInquilino: () => Promise<void>;
   inquilinoVisitantesData: Visitante[];
   setInquilinoVisitantes: React.Dispatch<React.SetStateAction<Visitante[]>>;
+  recargarVisitantesInquilino: () => Promise<void>;
   activityLog: ActivityItem[];
   alertas: AlertaItem[];
   adminNotifications: NotificationItem[];
@@ -185,10 +190,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [pagosData] = useState<Pago[]>(initialPagosData);
   const [adminReservas, setReservasData] = useState<Reserva[]>([]);
   const [visitas] = useState<Visitante[]>(visitasData);
-  const [areasDisponiblesData] = useState<AreaInquilino[]>(areasDisponibles);
+  const [areasDisponiblesData, setAreasDisponibles] = useState<AreaInquilino[]>(areasDisponibles);
   const [inquilinoReservasData, setInquilinoReservas] = useState<Reserva[]>(inquilinoReservas);
   const [inquilinoVisitantesData, setInquilinoVisitantes] = useState<Visitante[]>(inquilinoVisitantes);
-  
+
   const [activityLog, setActivityLog] = useState<ActivityItem[]>(getInitialActivityLog);
   const [alertas, setAlertas] = useState<AlertaItem[]>(getInitialAlertas);
   const [adminNotifications, setAdminNotifications] = useState<NotificationItem[]>(getInitialAdminNotifications);
@@ -199,6 +204,110 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // el SP valida el rol contra este id real y rechaza cualquier otro.
   const { usuario, verificacion2FA } = useAuth();
   const idAdminActual = usuario?.idUsuario;
+
+  // --- Reservas / Visitantes del Inquilino (rol Inquilino) ---
+  // NOTA (cambio): antes inquilinoReservasData/inquilinoVisitantesData quedaban
+  // fijos en los mocks de sampleData.ts y NUNCA se reemplazaban por datos reales
+  // del backend. Estas dos funciones consultan /api/inquilino/reservas y
+  // /api/inquilino/visitantes (protegidas con authorizeRole('Inquilino')) y
+  // reemplazan el estado con la respuesta real.
+  const recargarReservasInquilino = useCallback(async () => {
+    if (!usuario || usuario.rol !== 'Inquilino') return;
+    try {
+      // El api client adjunta el Bearer token automáticamente y redirige a /login si expira.
+      const data = await inquilinoService.obtenerMisReservas();
+
+      if (!Array.isArray(data)) {
+        console.error('Error del backend al obtener reservas del inquilino:', data);
+        return;
+      }
+
+      // NOTA (cambio - fix mapeo de columnas): sp_ListarMisReservas devuelve
+      // id_reserva / cantidad_personas / estado_pago (no id / personas /
+      // pago_estado como se asumía), y fecha/hora_inicio/hora_fin vienen como
+      // ISO completo de SQL Server (ej. "1970-01-01T13:00:00.000Z" para TIME)
+      // en vez de "YYYY-MM-DD"/"HH:mm:ss" — toDateOnly/toTimeOnly normalizan
+      // eso para que formatHoraAMPM y el resto de la UI sigan funcionando
+      // igual que con los datos mock.
+      const transformed: Reserva[] = data.map((r) => ({
+        id: r.id_reserva,
+        area: r.area,
+        fecha: toDateOnly(r.fecha),
+        hora_inicio: toTimeOnly(r.hora_inicio),
+        hora_fin: toTimeOnly(r.hora_fin),
+        estado: r.estado as Reserva['estado'],
+        personas: r.cantidad_personas,
+        costo: r.costo,
+        pago_estado: r.estado_pago,
+      }));
+      setInquilinoReservas(transformed);
+    } catch (err) {
+      console.error('Error de red al recargar reservas del inquilino:', err);
+    }
+  }, [usuario]);
+
+  const recargarVisitantesInquilino = useCallback(async () => {
+    if (!usuario || usuario.rol !== 'Inquilino') return;
+    try {
+      // El api client adjunta el Bearer token automáticamente y redirige a /login si expira.
+      const data = await inquilinoService.obtenerVisitantes();
+
+      if (!Array.isArray(data)) {
+        console.error('Error del backend al obtener visitantes del inquilino:', data);
+        return;
+      }
+
+      // NOTA (cambio - fix mapeo de columnas): sp_ListarMisVisitantes devuelve
+      // id_visitante / nombre_completo / documento_identidad (no id / nombre /
+      // documento como se asumía), y hora_esperada viene como ISO completo de
+      // SQL Server — toTimeOnly la normaliza a "HH:mm:ss" para formatHoraAMPM.
+      const transformed: Visitante[] = data.map((v) => ({
+        id: v.id_visitante,
+        nombre: v.nombre_completo,
+        documento: v.documento_identidad,
+        placa: v.placa ?? '',
+        hora_esperada: v.hora_esperada ? toTimeOnly(v.hora_esperada) : '',
+        estado: v.estado,
+        motivo_rechazo: v.motivo_rechazo ?? undefined,
+      }));
+      setInquilinoVisitantes(transformed);
+    } catch (err) {
+      console.error('Error de red al recargar visitantes del inquilino:', err);
+    }
+  }, [usuario]);
+
+  // NOTA (cambio): areasDisponiblesData quedaba fijo en el mock de sampleData.ts
+  // y nunca se reemplazaba por datos reales. sp_ListarAreasDisponibles devuelve
+  // id_area/capacidad_max/estado (no id/capacidad/disponible como asumía el
+  // tipo AreaInquilino de la UI), y hora_apertura/hora_cierre vienen como ISO
+  // completo de SQL Server (ej. "1970-01-01T06:00:00.000Z") en vez del número
+  // de hora que espera la UI (horario_inicio/horario_fin) — se extrae con
+  // getUTCHours() para no arrastrar el desfase de zona horaria del cliente.
+  const recargarAreasDisponibles = useCallback(async () => {
+    if (!usuario || usuario.rol !== 'Inquilino') return;
+    try {
+      const data = await inquilinoService.obtenerAreasDisponibles();
+
+      if (!Array.isArray(data)) {
+        console.error('Error del backend al obtener áreas disponibles:', data);
+        return;
+      }
+
+      const transformed: AreaInquilino[] = data.map((a: AreaInquilinoRaw) => ({
+        id: a.id_area,
+        nombre: a.nombre,
+        imagen: a.foto_principal || '/img/area-placeholder.jpg',
+        capacidad: a.capacidad_max,
+        horario_inicio: new Date(a.hora_apertura).getUTCHours(),
+        horario_fin: new Date(a.hora_cierre).getUTCHours(),
+        costo_por_hora: a.costo_por_hora,
+        disponible: a.estado === 'Disponible',
+      }));
+      setAreasDisponibles(transformed);
+    } catch (err) {
+      console.error('Error de red al recargar áreas disponibles:', err);
+    }
+  }, [usuario]);
 
   // --- Personal CRUD ---
   const recargarPersonal = useCallback(async () => {
@@ -508,13 +617,25 @@ export function DataProvider({ children }: { children: ReactNode }) {
     // (después del await de la API), nunca de forma síncrona en el efecto.
     // La regla react-hooks/set-state-in-effect es conservadora y la marca.
     /* eslint-disable react-hooks/set-state-in-effect */
-    recargarPersonal();
-    recargarResidentes();
-    recargarContratos();
-    recargarDepartamentos();
-    recargarReservas();
+    // NOTA (cambio - fix 403 + reservas/visitantes vacías):
+    // Antes se llamaban SIEMPRE las 5 rutas de admin sin importar el rol
+    // autenticado. authorizeRole('Administrador') las rechazaba con 403 para
+    // Guarda/Inquilino, y las reservas/visitantes del inquilino nunca se
+    // cargaban desde el backend (quedaban en el mock de sampleData.ts).
+    if (usuario.rol === 'Administrador') {
+      recargarPersonal();
+      recargarResidentes();
+      recargarContratos();
+      recargarDepartamentos();
+      recargarReservas();
+    } else if (usuario.rol === 'Inquilino') {
+      recargarReservasInquilino();
+      recargarVisitantesInquilino();
+      recargarAreasDisponibles();
+    }
+    // Guarda no necesita ninguna de estas listas por ahora.
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [usuario, verificacion2FA, recargarPersonal, recargarResidentes, recargarContratos, recargarDepartamentos, recargarReservas]);
+  }, [usuario, verificacion2FA, recargarPersonal, recargarResidentes, recargarContratos, recargarDepartamentos, recargarReservas, recargarReservasInquilino, recargarVisitantesInquilino, recargarAreasDisponibles]);
 
   // --- Helpers Notificaciones / Actividad ---
   const addActivity = useCallback((descripcion: string, icono = 'fa-circle', color = 'var(--accent)') => {
@@ -572,9 +693,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       pagosData,
       reservasData: adminReservas,
       visitas,
-      areasDisponiblesData,
-      inquilinoReservasData, setInquilinoReservas,
-      inquilinoVisitantesData, setInquilinoVisitantes,
+      areasDisponiblesData, recargarAreasDisponibles,
+      inquilinoReservasData, setInquilinoReservas, recargarReservasInquilino,
+      inquilinoVisitantesData, setInquilinoVisitantes, recargarVisitantesInquilino,
       activityLog, alertas,
       adminNotifications, guardiaNotifications, inquilinoNotifications,
       addActivity, addAlerta, addNotification,

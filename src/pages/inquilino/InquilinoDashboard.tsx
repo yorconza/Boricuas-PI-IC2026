@@ -8,24 +8,66 @@
  * la próxima visita y accesos rápidos a las funciones principales.
  *
  * Componentes que utiliza
- * - useData (contexto: inquilinoReservasData, inquilinoVisitantesData)
- * - useLocalDate (formato de hora)
+ * - inquilinoService (obtenerProximaReserva / obtenerProximaVisita)
+ * - useLocalDate (formato de fecha/hora)
  *
+ * NOTA (cambio): antes se pedían TODAS las reservas/visitantes
+ * (obtenerMisReservas/obtenerVisitantes) y se elegía la "próxima" con
+ * `.find()` sobre el array, que viene ordenado como lo devuelva
+ * sp_ListarMisReservas/sp_ListarMisVisitantes (por id, no por fecha) — por
+ * eso mostraba la última creada en vez de la más próxima en el tiempo.
+ * Ahora se usan directamente los endpoints /proxima
+ * (sp_ObtenerMiProximaReserva / sp_ObtenerMiProximaVisita), que ya filtran
+ * por fecha futura y ordenan por fecha/hora en el propio SP.
  * ============================================================================
  */
-
-import { useData } from '../../context/DataContext';
-import { formatHoraAMPM } from '../../hooks/useLocalDate';
+import { useState, useEffect } from 'react';
+import { toDateOnly, toTimeOnly, formatHoraAMPM } from '../../hooks/useLocalDate';
+import { inquilinoService, type ProximaReservaRaw, type ProximaVisitaRaw } from '../../services/inquilinoService';
+import { useToast } from '../../components/Toast';
 
 export default function InquilinoDashboard() {
-  const { inquilinoReservasData, inquilinoVisitantesData } = useData();
+  const [proximaReserva, setProximaReserva] = useState<ProximaReservaRaw | null>(null);
+  const [proximaVisita, setProximaVisita] = useState<ProximaVisitaRaw | null>(null);
+  const [loading, setLoading] = useState(true);
+  const { showToast } = useToast();
 
-  const proximaReserva = inquilinoReservasData.filter(r => r.estado !== 'Cancelada')[0] || null;
-  const proximaVisita = inquilinoVisitantesData.filter(v => v.estado === 'Pendiente')[0] || null;
+  useEffect(() => {
+    const cargarDatosDashboard = async () => {
+      try {
+        setLoading(true);
+
+        // Se piden directamente la próxima reserva y la próxima visita (ya
+        // filtradas/ordenadas por fecha en el SP), no las listas completas.
+        const [reserva, visita] = await Promise.all([
+          inquilinoService.obtenerProximaReserva(),
+          inquilinoService.obtenerProximaVisita(),
+        ]);
+
+        setProximaReserva(reserva);
+        setProximaVisita(visita);
+      } catch (error: unknown) {
+        const err = error as Error;
+        showToast(err.message || 'Error al cargar los datos del dashboard', 'error');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    cargarDatosDashboard();
+  }, []);
 
   const goTo = (page: string) => {
     window.location.hash = page;
   };
+
+  if (loading) {
+    return (
+      <div style={{ textAlign: 'center', padding: '3rem' }}>
+        <p style={{ color: 'var(--text-secondary)' }}>Cargando información del dashboard...</p>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -34,41 +76,51 @@ export default function InquilinoDashboard() {
       </div>
 
       <div className="dashboard-grid-inquilino">
+        {/* Tarjeta de Próxima Reserva */}
         <div className="card">
-          <div className="card-header"><h3>Mi próxima reserva</h3></div>
-          <div id="proximaReservaContainer">
+          <div className="card-header">
+            <h3>Próxima reserva</h3>
+            <button className="btn-sm" onClick={() => goTo('mis-reservas')}>Ver todas</button>
+          </div>
+          <div className="card-body">
             {!proximaReserva ? (
-              <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 'var(--space-2)' }}>No tienes reservas próximas</p>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>No tienes reservas activas próximamente.</p>
             ) : (
-              <div className="reservation-preview">
-                <div className="reservation-icon"><i className="fas fa-calendar"></i></div>
-                <div className="reservation-info">
+              <div className="next-event-item">
+                <div className="event-icon"><i className="fas fa-calendar-alt"></i></div>
+                <div className="event-info">
                   <div className="title">{proximaReserva.area}</div>
-                  <div className="subtitle">{proximaReserva.fecha} · {formatHoraAMPM(proximaReserva.hora_inicio)} - {formatHoraAMPM(proximaReserva.hora_fin)}</div>
-                </div>
-                <div className="reservation-actions">
-                  <button className="btn-sm" onClick={() => goTo('mis-reservas')}>Ver reserva</button>
+                  <div className="subtitle">
+                    {toDateOnly(proximaReserva.fecha)} · {formatHoraAMPM(toTimeOnly(proximaReserva.hora_inicio))}
+                  </div>
                 </div>
               </div>
             )}
           </div>
         </div>
 
+        {/* Tarjeta de Próxima Visita */}
         <div className="card">
-          <div className="card-header"><h3>Mi próxima visita</h3></div>
-          <div id="proximaVisitaContainer">
+          <div className="card-header">
+            <h3>Próxima visita</h3>
+            <button className="btn-sm" onClick={() => goTo('mis-visitantes')}>Ver todas</button>
+          </div>
+          <div className="card-body">
             {!proximaVisita ? (
-              <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 'var(--space-2)' }}>No tienes visitas próximas</p>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>No hay visitas pendientes registradas.</p>
             ) : (
-              <div className="visit-preview">
-                <div className="visit-icon"><i className="fas fa-user"></i></div>
+              <div className="next-event-item">
+                <div className="event-icon"><i className="fas fa-user-clock"></i></div>
                 <div className="visit-info">
-                  <div className="title">{proximaVisita.nombre}</div>
-                  <div className="subtitle">Hoy · {proximaVisita.hora_esperada && proximaVisita.hora_esperada !== '--:--' ? formatHoraAMPM(proximaVisita.hora_esperada) : '--:--'}</div>
-                  <div style={{ marginTop: '4px' }}><span className="badge badge-warning">Pendiente</span></div>
-                </div>
-                <div className="visit-actions">
-                  <button className="btn-sm" onClick={() => goTo('mis-visitantes')}>Ver visita</button>
+                  <div className="title">{proximaVisita.nombre_completo}</div>
+                  <div className="subtitle">
+                    Hora ⋅ {proximaVisita.hora_esperada ? formatHoraAMPM(toTimeOnly(proximaVisita.hora_esperada)) : '--:--'}
+                  </div>
+                  <div style={{ marginTop: '4px' }}>
+                    <span className={`badge ${proximaVisita.estado === 'Autorizado' ? 'badge-success' : 'badge-warning'}`}>
+                      {proximaVisita.estado}
+                    </span>
+                  </div>
                 </div>
               </div>
             )}
@@ -76,6 +128,7 @@ export default function InquilinoDashboard() {
         </div>
       </div>
 
+      {/* Accesos rápidos */}
       <div className="card" style={{ marginTop: 'var(--space-4)' }}>
         <div className="card-header"><h3>Accesos rápidos</h3></div>
         <div className="quick-actions">

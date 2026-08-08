@@ -12,12 +12,18 @@
  * - getLocalDateTimeString(date?) → Retorna "YYYY-MM-DD HH:MM"
  * - formatHora(hora24)         → Convierte "15:30" a "03:30 PM"
  * - formatHoraAMPM(hora24)     → Convierte "15:30" a "3:30 p.m."
+ * - toDateOnly(fecha)          → Convierte ISO SQL Server ("...T00:00:00.000Z")
+ *                                 a "YYYY-MM-DD" plano (o la deja igual si ya lo es)
+ * - toTimeOnly(hora)           → Convierte ISO SQL Server (TIME/DATETIME) a
+ *                                 "HH:mm:ss" plano (o la deja igual si ya lo es)
  * - getTimeAgo(timestamp)      → Retorna "hace 5 min", "hace 3 h", etc.
  * - getGreeting()              → Retorna "Buenos días / tardes / noches"
  *
  * Quién las utiliza
  * - AdminDashboard, ReservasPage, AreasPage, VisitasPage
  * - InquilinoDashboard, MisReservasPage, NuevaReservaPage
+ * - DataContext.tsx (toDateOnly/toTimeOnly, para normalizar lo que devuelve
+ *   el backend de Inquilino antes de guardarlo en el estado)
  * - Cualquier componente que muestre fechas u horas
  *
  * ============================================================================
@@ -53,6 +59,41 @@ export function formatHoraAMPM(hora24: string): string {
   if (h > 12) h = h - 12;
   if (h === 0) h = 12;
   return h + ':' + m + ' ' + ampm;
+}
+
+/**
+ * Convierte un valor de fecha que puede venir como "YYYY-MM-DD" (ya plano)
+ * o como ISO completo (lo que devuelve SQL Server al serializar una columna
+ * DATE, ej. "2026-08-15T00:00:00.000Z") a un string plano "YYYY-MM-DD".
+ * Usa los componentes UTC porque SQL Server no aplica timezone a DATE: la
+ * "T00:00:00.000Z" es solo un artefacto de la serialización, no una hora real.
+ */
+export function toDateOnly(fecha: string): string {
+  if (!fecha) return '';
+  if (!fecha.includes('T')) return fecha;
+  const d = new Date(fecha);
+  if (isNaN(d.getTime())) return fecha;
+  const year = d.getUTCFullYear();
+  const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Convierte un valor de hora que puede venir como "HH:mm[:ss]" (ya plano) o
+ * como ISO completo (lo que devuelve SQL Server para columnas TIME —Date con
+ * fecha base 1970-01-01, ej. "1970-01-01T13:00:00.000Z"— o DATETIME) a
+ * "HH:mm:ss". Usa los componentes UTC por la misma razón que toDateOnly.
+ */
+export function toTimeOnly(hora: string): string {
+  if (!hora) return '';
+  if (!hora.includes('T')) return hora;
+  const d = new Date(hora);
+  if (isNaN(d.getTime())) return hora;
+  const h = String(d.getUTCHours()).padStart(2, '0');
+  const m = String(d.getUTCMinutes()).padStart(2, '0');
+  const s = String(d.getUTCSeconds()).padStart(2, '0');
+  return `${h}:${m}:${s}`;
 }
 
 export function getTimeAgo(timestamp: number): string {

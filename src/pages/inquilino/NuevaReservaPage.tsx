@@ -9,7 +9,8 @@
  * modal de pago simulado para confirmar la reserva.
  *
  * Componentes que utiliza
- * - useData (contexto: areasDisponiblesData, inquilinoReservasData)
+ * - useData (contexto: areasDisponiblesData, inquilinoReservasData, recargarReservasInquilino)
+ * - inquilinoService (crearReserva → POST /inquilino/reservas)
  * - useToast (notificaciones)
  * - useLocalDate (formato de hora y fecha)
  *
@@ -19,7 +20,9 @@
  * 3. Ingresa cantidad de personas
  * 4. Ve el costo estimado calculado automáticamente
  * 5. Hace clic en "Reservar" → modal de pago simulado
- * 6. Confirma pago → reserva creada y notificada
+ * 6. Confirma pago → POST /inquilino/reservas al backend; si responde OK,
+ *    se recarga la lista real de reservas desde el backend (ya no se
+ *    empuja un objeto falso al estado local).
  *
  * ============================================================================
  */
@@ -29,13 +32,14 @@ import { useData } from '../../context/DataContext';
 import { useToast } from '../../components/Toast';
 import { formatHoraAMPM, getLocalDateString } from '../../hooks/useLocalDate';
 import { formatearMoneda } from '../../utils/formatters';
+import { inquilinoService } from '../../services/inquilinoService';
 
 interface NuevaReservaPageProps {
   preselectedAreaId?: number | null;
 }
 
 export default function NuevaReservaPage({ preselectedAreaId }: NuevaReservaPageProps) {
-  const { areasDisponiblesData, inquilinoReservasData, setInquilinoReservas, addNotification } = useData();
+  const { areasDisponiblesData, inquilinoReservasData, recargarReservasInquilino, addNotification } = useData();
   const { showToast } = useToast();
 
   const defaultArea = preselectedAreaId
@@ -47,6 +51,7 @@ export default function NuevaReservaPage({ preselectedAreaId }: NuevaReservaPage
   const [horaInicio, setHoraInicio] = useState('');
   const [horaFin, setHoraFin] = useState('');
   const [personas, setPersonas] = useState(1);
+  const [enviando, setEnviando] = useState(false);
 
   const area = areasDisponiblesData.find(a => a.id === Number(areaId));
 
@@ -130,45 +135,40 @@ export default function NuevaReservaPage({ preselectedAreaId }: NuevaReservaPage
     }
   };
 
-  const confirmarPago = () => {
+  // NOTA (cambio): antes armaba un objeto de reserva falso y lo empujaba
+  // directo al estado local (nunca se persistía en la BD). Ahora llama a
+  // POST /inquilino/reservas vía inquilinoService.crearReserva y, si el
+  // backend confirma, recarga la lista real con recargarReservasInquilino().
+  const confirmarPago = async () => {
     if (!area) return;
-    const metodoPago = (document.getElementById('metodoPago') as HTMLSelectElement)?.value || 'tarjeta';
+    const metodoPago = ((document.getElementById('metodoPago') as HTMLSelectElement)?.value || 'tarjeta') as 'tarjeta' | 'efectivo' | 'sinpe';
     const metodoTexto = metodoPago === 'tarjeta' ? 'Tarjeta' : metodoPago === 'efectivo' ? 'Efectivo' : 'Sinpe Móvil';
-    const [h1, m1] = horaInicio.split(':').map(Number);
-    const [h2, m2] = horaFin.split(':').map(Number);
-    const minutos = (h2 * 60 + m2) - (h1 * 60 + m1);
-    const horas = minutos / 60;
-    const costo = horas * area.costo_por_hora;
 
-    const newId = inquilinoReservasData.length ? Math.max(...inquilinoReservasData.map(r => r.id)) + 1 : 1;
-    // NOTA (cambio para compilar con `tsc -b`): `estado` se declara `as const`
-    // para conservar el literal 'Confirmada' y que sea asignable a la unión de
-    // estados de la interfaz `Reserva` (sin `as const`, TS lo amplía a `string`).
-    const nuevaReserva = {
-      id: newId,
-      area: area.nombre,
-      fecha,
-      hora_inicio: horaInicio,
-      hora_fin: horaFin,
-      personas,
-      estado: 'Confirmada' as const,
-      costo,
-      pago_estado: 'Pagado',
-      horas_anticipacion_cancelacion: 1
-    };
+    setEnviando(true);
+    try {
+      await inquilinoService.crearReserva({
+        id_area: area.id,
+        fecha,
+        hora_inicio: horaInicio,
+        hora_fin: horaFin,
+        cantidad_personas: personas,
+        metodo_pago: metodoPago,
+      });
 
-    setInquilinoReservas(prev => {
-      const updated = [...prev, nuevaReserva];
-      if (updated.length <= 16) return updated;
-      return updated.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()).slice(0, 16);
-    });
-    document.getElementById('confirmarPagoModal')?.classList.remove('open');
-    showToast(`Reserva de ${nuevaReserva.area} confirmada. Pago con ${metodoTexto} registrado.`, 'success');
-    addNotification('inquilino', 'Reserva confirmada', `Tu reserva de ${nuevaReserva.area} ha sido confirmada.`);
-    setHoraInicio('');
-    setHoraFin('');
-    setPersonas(1);
-    setFecha(getLocalDateString());
+      await recargarReservasInquilino();
+      document.getElementById('confirmarPagoModal')?.classList.remove('open');
+      showToast(`Reserva de ${area.nombre} confirmada. Pago con ${metodoTexto} registrado.`, 'success');
+      addNotification('inquilino', 'Reserva confirmada', `Tu reserva de ${area.nombre} ha sido confirmada.`);
+      setHoraInicio('');
+      setHoraFin('');
+      setPersonas(1);
+      setFecha(getLocalDateString());
+    } catch (error: unknown) {
+      const err = error as Error;
+      showToast(err.message || 'No se pudo confirmar la reserva.', 'error');
+    } finally {
+      setEnviando(false);
+    }
   };
 
   const closeConfirmarPago = () => {
@@ -258,7 +258,9 @@ export default function NuevaReservaPage({ preselectedAreaId }: NuevaReservaPage
           </div>
           <div className="modal-actions">
             <button className="btn-secondary" onClick={closeConfirmarPago}>Cancelar</button>
-            <button className="btn-primary" id="confirmarPagoBtn" onClick={confirmarPago}>Pagar y confirmar</button>
+            <button className="btn-primary" id="confirmarPagoBtn" onClick={confirmarPago} disabled={enviando}>
+              {enviando ? 'Procesando...' : 'Pagar y confirmar'}
+            </button>
           </div>
         </div>
       </div>
