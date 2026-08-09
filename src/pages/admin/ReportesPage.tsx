@@ -4,9 +4,8 @@
  * ============================================================================
  *
  * ¿Qué hace?
- * Pantalla de reportes administrativos. Permite generar reportes en
- * diferentes formatos (PDF, Excel, JSON, XML) para reservas, pagos,
- * contratos y visitas.
+ * Pantalla de reportes administrativos. Genera reportes reales en PDF
+ * conectados a la base de datos para contratos y reservas.
  *
  * Componentes que utiliza
  * - PageHeader (título)
@@ -26,10 +25,35 @@ export default function ReportesPage() {
   const [drawerTitle, setDrawerTitle] = useState('');
   const [drawerBody, setDrawerBody] = useState<React.ReactNode>(null);
   const [drawerFooter, setDrawerFooter] = useState<React.ReactNode>(null);
-  // NOTA (cambio para compilar con `tsc -b`): se eliminó el estado `reportType`
-  // porque solo se escribía (setReportType) pero nunca se leía (TS6133).
 
   const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+  // 🚀 Función para abrir/descargar el PDF real desde Node.js
+  const ejecutarDescargaPDF = (tipo: string, fechaInicio: string, fechaFin: string) => {
+    const baseUrl = 'http://localhost:4000/api';
+
+    // 1. Si no es un reporte disponible, mostramos alerta y salimos
+    if (tipo !== 'contratos' && tipo !== 'reservas') {
+      showAlert(`El reporte de ${tipo} estará disponible próximamente.`);
+      return;
+    }
+
+    // 2. Definimos el endpoint según el tipo
+  const endpoint = tipo === 'contratos'
+    ? `${baseUrl}/reportes/contratos/pdf`
+    : `${baseUrl}/reportes/reservas/pdf`;
+
+    // 3. Construimos los parámetros URL si existen fechas
+    const params = new URLSearchParams();
+    if (fechaInicio) params.append('fechaInicio', fechaInicio);
+    if (fechaFin) params.append('fechaFin', fechaFin);
+
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+
+    // 4. Abrimos el PDF en nueva pestaña y cerramos el drawer
+    window.open(`${endpoint}${queryString}`, '_blank');
+    setDrawerOpen(false);
+  };
 
   const generarReporte = (tipo: string) => {
     setDrawerTitle(`Reporte de ${capitalize(tipo)}`);
@@ -49,7 +73,11 @@ export default function ReportesPage() {
       </div>
     );
     setDrawerFooter(
-      <button className="btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => confirmarRango(tipo)}>
+      <button 
+        className="btn-primary" 
+        style={{ width: '100%', justifyContent: 'center' }} 
+        onClick={() => confirmarRango(tipo)}
+      >
         <i className="fas fa-file-export"></i> Generar reporte
       </button>
     );
@@ -80,10 +108,14 @@ export default function ReportesPage() {
         </p>
       </div>
     );
+
     setDrawerFooter(
       <div style={{ display: 'flex', gap: 'var(--space-2)', width: '100%', justifyContent: 'center' }}>
-        <button className="btn-primary" onClick={() => showAlert('Descargando...')}>
-          <i className="fas fa-download"></i> Descargar
+        <button 
+          className="btn-primary" 
+          onClick={() => ejecutarDescargaPDF(tipo, fechaInicio, fechaFin)}
+        >
+          <i className="fas fa-download"></i> Abrir PDF
         </button>
         <button className="btn-secondary" onClick={() => setDrawerOpen(false)}>
           Cerrar
@@ -97,6 +129,7 @@ export default function ReportesPage() {
     { tipo: 'pagos', titulo: 'Reporte de Pagos', desc: 'Resumen de pagos y morosidad.' },
     { tipo: 'contratos', titulo: 'Reporte de Contratos', desc: 'Listado de contratos activos y vencidos.' },
     { tipo: 'visitas', titulo: 'Reporte de Visitas', desc: 'Registro de accesos autorizados con filtros.' },
+    //{ tipo: 'bitacora', titulo:'Reporte de bitácora', desc: 'Informe de bitácora'}
   ];
 
   return (
@@ -111,9 +144,6 @@ export default function ReportesPage() {
             <div className="report-actions">
               <select defaultValue="PDF">
                 <option>PDF</option>
-                <option>Excel</option>
-                <option>JSON</option>
-                <option>XML</option>
               </select>
               <button className="btn-primary" onClick={() => generarReporte(r.tipo)}>
                 Generar

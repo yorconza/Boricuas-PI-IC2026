@@ -4,28 +4,30 @@
  * ============================================================================
  */
 
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import PageHeader from '../../components/PageHeader';
 import Drawer from '../../components/Drawer';
 import { useData } from '../../context/DataContext';
-import { useAlert } from '../../components/Alert';
 import type { Reserva } from '../../types';
 
+// Extensión de la interfaz para soportar los campos transformados del DataContext
+interface ReservaUI extends Reserva {
+  id?: number;
+  id_reserva?: number;
+  id_area?: number;
+  hora?: string;
+  hora_inicio?: string;
+  hora_fin?: string;
+  personas?: number;
+  cantidad_personas?: number;
+}
+
 export default function ReservasPage() {
-  const { 
-    reservasData, 
-    crearReserva, 
-    editarReserva, 
-    cancelarReserva, 
-    addActivity, 
-    addNotification 
-  } = useData();
-  const { showAlert, confirmar } = useAlert();
+  const { reservasData } = useData();
 
   const [activeTab, setActiveTab] = useState<'hoy' | 'historial'>('hoy');
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [drawerMode, setDrawerMode] = useState<'create' | 'view' | 'edit'>('create');
-  const [selectedItem, setSelectedItem] = useState<Reserva | null>(null);
+  const [selectedItem, setSelectedItem] = useState<ReservaUI | null>(null);
 
   // Filtros de búsqueda
   const [filtroArea, setFiltroArea] = useState('');
@@ -33,24 +35,23 @@ export default function ReservasPage() {
   const [filtroEstado, setFiltroEstado] = useState('');
   const [buscarResidente, setBuscarResidente] = useState('');
 
-  // Estados del Formulario
-  const [idArea, setIdArea] = useState<number>(0);
-  const [fecha, setFecha] = useState('');
-  const [horaInicio, setHoraInicio] = useState('');
-  const [horaFin, setHoraFin] = useState('');
-  const [cantidadPersonas, setCantidadPersonas] = useState<number>(1);
-  const [cargando, setCargando] = useState(false);
-
   // Fecha actual en ISO
   const hoyFechaStr = new Date().toISOString().split('T')[0];
 
+  // Cast seguro de reservasData al tipo con soporte UI
+  const reservas = (reservasData || []) as ReservaUI[];
+
   // Filtrado de la lista en memoria según la pestaña activa
-  const reservasFiltradas = (reservasData || []).filter(r => {
+  const reservasFiltradas = reservas.filter((r: ReservaUI) => {
     if (activeTab === 'hoy' && r.fecha !== hoyFechaStr) {
       return false;
     }
     if (filtroArea && r.id_area !== Number(filtroArea)) return false;
-    if (filtroHora && !r.hora_inicio?.startsWith(filtroHora)) return false;
+    
+    // Soporte para filtrar hora usando r.hora o r.hora_inicio
+    const hInicio = r.hora_inicio || (r.hora ? r.hora.split(' - ')[0] : '');
+    if (filtroHora && !hInicio.startsWith(filtroHora)) return false;
+
     if (filtroEstado && r.estado !== filtroEstado) return false;
     if (buscarResidente && !r.residente?.toLowerCase().includes(buscarResidente.toLowerCase())) return false;
 
@@ -64,192 +65,47 @@ export default function ReservasPage() {
     setBuscarResidente('');
   };
 
-  const openDrawer = (mode: 'create' | 'view' | 'edit', item?: Reserva) => {
-    setDrawerMode(mode);
-    setSelectedItem(item || null);
-
-    if (mode === 'edit' && item) {
-      // NOTA (cambio para compilar con `tsc -b`): `id_area` y `cantidad_personas`
-      // son opcionales en la interfaz `Reserva` (forma API vs forma UI/mock),
-      // por eso se garantiza un valor numérico con `??` antes de setear el estado.
-      setIdArea(item.id_area ?? 0);
-      setFecha(item.fecha);
-      setHoraInicio(item.hora_inicio);
-      setHoraFin(item.hora_fin);
-      setCantidadPersonas(item.cantidad_personas ?? 1);
-    } else if (mode === 'create') {
-      setIdArea(0);
-      setFecha(hoyFechaStr);
-      setHoraInicio('');
-      setHoraFin('');
-      setCantidadPersonas(1);
-    }
-
+  const openDrawer = (item: ReservaUI) => {
+    setSelectedItem(item);
     setDrawerOpen(true);
   };
 
-  const handleCreateSave = useCallback(async () => {
-    if (!idArea || !fecha || !horaInicio || !horaFin) {
-      showAlert('Por favor complete todos los campos obligatorios.');
-      return;
-    }
-
-    try {
-      setCargando(true);
-      await crearReserva({
-        id_area: Number(idArea),
-        fecha,
-        hora_inicio: horaInicio,
-        hora_fin: horaFin,
-        cantidad_personas: Number(cantidadPersonas)
-      });
-
-      addActivity('Nueva reserva creada', 'fa-calendar-plus', 'var(--accent)');
-      addNotification('admin', 'Reserva creada', 'Se ha agendado una nueva reserva.', 'fa-calendar-plus');
-
-      setDrawerOpen(false);
-      showAlert('Reserva creada exitosamente.');
-    } catch (err: unknown) {
-      const error = err as Error;
-      showAlert(`Error al crear la reserva: ${error.message}`);
-    } finally {
-      setCargando(false);
-    }
-  }, [idArea, fecha, horaInicio, horaFin, cantidadPersonas, crearReserva, addActivity, addNotification, showAlert]);
-
-  const handleEditSave = useCallback(async () => {
-    if (!selectedItem) return;
-
-    try {
-      setCargando(true);
-      // NOTA (cambio para compilar con `tsc -b`): `id_reserva` es opcional en la
-      // interfaz `Reserva`. Los datos mock/transformados traen `id`, por eso se
-      // prefiere `id` y se cae a `id_reserva` como respaldo para la forma API.
-      await editarReserva(selectedItem.id ?? selectedItem.id_reserva!, {
-        fecha,
-        hora_inicio: horaInicio,
-        hora_fin: horaFin,
-        cantidad_personas: Number(cantidadPersonas)
-      });
-
-      addActivity(`Reserva #${selectedItem.id_reserva} actualizada`, 'fa-edit', 'var(--accent)');
-      addNotification('admin', 'Reserva modificada', `Se actualizó la reserva #${selectedItem.id_reserva}.`, 'fa-edit');
-
-      setDrawerOpen(false);
-      showAlert('Reserva actualizada correctamente.');
-    } catch (err: unknown) {
-      const error = err as Error;
-      showAlert(`Error al actualizar reserva: ${error.message}`);
-    } finally {
-      setCargando(false);
-    }
-  }, [selectedItem, fecha, horaInicio, horaFin, cantidadPersonas, editarReserva, addActivity, addNotification, showAlert]);
-
-  const handleCancelar = async (idReserva: number, areaNombre: string) => {
-    const confirmado = await confirmar(
-      `¿Desea cancelar la reserva para ${areaNombre}?`,
-      { titulo: 'Cancelar reserva', confirmarTexto: 'Sí, cancelar' }
-    );
-    if (!confirmado) return;
-
-    try {
-      await cancelarReserva(idReserva);
-      addActivity(`Reserva #${idReserva} cancelada`, 'fa-ban', 'var(--error)');
-      showAlert('Reserva cancelada correctamente.');
-    } catch (err: unknown) {
-      const error = err as Error;
-      showAlert(`Error al cancelar: ${error.message}`);
-    }
-  };
-
   const renderDrawerContent = () => {
-    if (drawerMode === 'view' && selectedItem) {
-      return (
-        <div className="detail-card">
-          <div className="detail-row">
-            <span className="detail-label">Residente</span>
-            <span className="detail-value">{selectedItem.residente}</span>
-          </div>
-          <div className="detail-row">
-            <span className="detail-label">Área</span>
-            <span className="detail-value">{selectedItem.area}</span>
-          </div>
-          <div className="detail-row">
-            <span className="detail-label">Fecha</span>
-            <span className="detail-value">{selectedItem.fecha}</span>
-          </div>
-          <div className="detail-row">
-            <span className="detail-label">Horario</span>
-            <span className="detail-value">{selectedItem.hora_inicio} - {selectedItem.hora_fin}</span>
-          </div>
-          <div className="detail-row">
-            <span className="detail-label">Personas</span>
-            <span className="detail-value">{selectedItem.cantidad_personas}</span>
-          </div>
-          <div className="detail-row">
-            <span className="detail-label">Estado</span>
-            <span className="detail-value">
-              <span className={`badge ${selectedItem.estado === 'Reservado' ? 'badge-success' : 'badge-warning'}`}>
-                {selectedItem.estado}
-              </span>
-            </span>
-          </div>
-        </div>
-      );
-    }
+    if (!selectedItem) return null;
+
+    const item = selectedItem;
+    const horario = item.hora || (item.hora_inicio && item.hora_fin ? `${item.hora_inicio} - ${item.hora_fin}` : '-');
+    const numPersonas = item.personas ?? item.cantidad_personas ?? '-';
 
     return (
-      <div className="form-section">
-        <h4>{drawerMode === 'create' ? 'Nueva Reserva' : 'Editar Reserva'}</h4>
-
-        {drawerMode === 'create' && (
-          <div className="form-group">
-            <label>ID Área Comun *</label>
-            <input 
-              type="number" 
-              value={idArea || ''} 
-              onChange={e => setIdArea(Number(e.target.value))} 
-              placeholder="Ej: 1" 
-            />
-          </div>
-        )}
-
-        <div className="form-group">
-          <label>Fecha *</label>
-          <input 
-            type="date" 
-            value={fecha} 
-            onChange={e => setFecha(e.target.value)} 
-          />
+      <div className="detail-card">
+        <div className="detail-row">
+          <span className="detail-label">Residente</span>
+          <span className="detail-value">{item.residente || '-'}</span>
         </div>
-
-        <div className="form-row">
-          <div className="form-group">
-            <label>Hora Inicio *</label>
-            <input 
-              type="time" 
-              value={horaInicio} 
-              onChange={e => setHoraInicio(e.target.value)} 
-            />
-          </div>
-          <div className="form-group">
-            <label>Hora Fin *</label>
-            <input 
-              type="time" 
-              value={horaFin} 
-              onChange={e => setHoraFin(e.target.value)} 
-            />
-          </div>
+        <div className="detail-row">
+          <span className="detail-label">Área</span>
+          <span className="detail-value">{item.area || '-'}</span>
         </div>
-
-        <div className="form-group">
-          <label>Cantidad de Personas *</label>
-          <input 
-            type="number" 
-            min={1} 
-            value={cantidadPersonas} 
-            onChange={e => setCantidadPersonas(Number(e.target.value))} 
-          />
+        <div className="detail-row">
+          <span className="detail-label">Fecha</span>
+          <span className="detail-value">{item.fecha}</span>
+        </div>
+        <div className="detail-row">
+          <span className="detail-label">Horario</span>
+          <span className="detail-value">{horario}</span>
+        </div>
+        <div className="detail-row">
+          <span className="detail-label">Personas</span>
+          <span className="detail-value">{numPersonas}</span>
+        </div>
+        <div className="detail-row">
+          <span className="detail-label">Estado</span>
+          <span className="detail-value">
+            <span className={`badge ${item.estado === 'Reservado' || item.estado === 'Confirmada' ? 'badge-success' : 'badge-warning'}`}>
+              {item.estado}
+            </span>
+          </span>
         </div>
       </div>
     );
@@ -257,11 +113,7 @@ export default function ReservasPage() {
 
   return (
     <>
-      <PageHeader title="Reservas">
-        <button className="btn-primary" onClick={() => openDrawer('create')}>
-          <i className="fas fa-plus"></i> Nueva reserva
-        </button>
-      </PageHeader>
+      <PageHeader title="Reservas" />
 
       <div className="tabs-container">
         <button 
@@ -304,6 +156,7 @@ export default function ReservasPage() {
           <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)}>
             <option value="">Todos</option>
             <option value="Reservado">Reservado</option>
+            <option value="Confirmada">Confirmada</option>
             <option value="Completado">Completado</option>
             <option value="Cancelado">Cancelado</option>
           </select>
@@ -332,33 +185,32 @@ export default function ReservasPage() {
             </tr>
           </thead>
           <tbody>
-            {reservasFiltradas.map(r => (
-              <tr key={r.id_reserva}>
-                <td data-label="Residente">{r.residente}</td>
-                <td data-label="Área">{r.area}</td>
-                <td data-label="Fecha">{r.fecha}</td>
-                <td data-label="Horario">{r.hora_inicio} - {r.hora_fin}</td>
-                <td data-label="Personas">{r.cantidad_personas}</td>
-                <td data-label="Estado">
-                  <span className={`badge ${r.estado === 'Reservado' ? 'badge-success' : 'badge-warning'}`}>
-                    {r.estado}
-                  </span>
-                </td>
-                <td data-label="Acciones" className="action-icons">
-                  <a onClick={() => openDrawer('view', r)} aria-label="Ver"><i className="fas fa-eye"></i></a>
-                  {r.estado === 'Reservado' && (
-                    <>
-                      <a onClick={() => openDrawer('edit', r)} aria-label="Editar"><i className="fas fa-edit"></i></a>
-                      {/* NOTA: `id_reserva` es opcional en la interfaz; los datos
-                          mock/transformados traen `id`, se cae a `id_reserva` como respaldo. */}
-                      <a onClick={() => handleCancelar(r.id ?? r.id_reserva!, r.area)} aria-label="Cancelar" style={{ color: 'var(--error)' }}>
-                        <i className="fas fa-ban"></i>
-                      </a>
-                    </>
-                  )}
-                </td>
-              </tr>
-            ))}
+            {reservasFiltradas.map((r: ReservaUI) => {
+              const resId = r.id ?? r.id_reserva ?? 0;
+              const horario = r.hora || (r.hora_inicio && r.hora_fin ? `${r.hora_inicio} - ${r.hora_fin}` : '-');
+              const numPersonas = r.personas ?? r.cantidad_personas ?? '-';
+              const esActiva = r.estado === 'Reservado' || r.estado === 'Confirmada';
+
+              return (
+                <tr key={resId}>
+                  <td data-label="Residente">{r.residente || '-'}</td>
+                  <td data-label="Área">{r.area || '-'}</td>
+                  <td data-label="Fecha">{r.fecha}</td>
+                  <td data-label="Horario">{horario}</td>
+                  <td data-label="Personas">{numPersonas}</td>
+                  <td data-label="Estado">
+                    <span className={`badge ${esActiva ? 'badge-success' : 'badge-warning'}`}>
+                      {r.estado}
+                    </span>
+                  </td>
+                  <td data-label="Acciones" className="action-icons">
+                    <a onClick={() => openDrawer(r)} aria-label="Ver" title="Ver detalle">
+                      <i className="fas fa-eye"></i>
+                    </a>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}
@@ -366,9 +218,7 @@ export default function ReservasPage() {
       <Drawer
         isOpen={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        title={drawerMode === 'create' ? 'Nueva reserva' : drawerMode === 'edit' ? 'Editar reserva' : 'Ver reserva'}
-        onSave={drawerMode === 'edit' ? handleEditSave : (drawerMode === 'create' ? handleCreateSave : undefined)}
-        saveText={cargando ? 'Guardando...' : drawerMode === 'create' ? 'Crear' : 'Guardar'}
+        title="Ver reserva"
         size="md"
       >
         {renderDrawerContent()}
