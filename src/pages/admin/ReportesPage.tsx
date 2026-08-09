@@ -39,9 +39,9 @@ export default function ReportesPage() {
     }
 
     // 2. Definimos el endpoint según el tipo
-    const endpoint = tipo === 'contratos'
-      ? `${baseUrl}/contratos/reporte/pdf`
-      : `${baseUrl}/reportes/reservas/pdf`;
+  const endpoint = tipo === 'contratos'
+    ? `${baseUrl}/reportes/contratos/pdf`
+    : `${baseUrl}/reportes/reservas/pdf`;
 
     // 3. Construimos los parámetros URL si existen fechas
     const params = new URLSearchParams();

@@ -4,7 +4,7 @@ import { descargarReporteReservas } from '../controllers/reservaReporteControlle
 
 const router = Router();
 
-// GET /api/reportes/reservas/pdf
-router.get('/reservas/pdf', descargarReporteReservas);
+// Como app.ts ya tiene '/api/reportes/reservas', aquí solo pones '/pdf'
+router.get('/pdf', descargarReporteReservas); 
 
 export default router;
