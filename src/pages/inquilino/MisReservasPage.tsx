@@ -34,6 +34,10 @@
  * 3. El backend devuelve el estado cancelado como 'Cancelado' (no
  *    'Cancelada' como el resto de la UI/mock) — se filtra ambos para que el
  *    botón "Cancelar" desaparezca igual que en las demás filas ya canceladas.
+ *
+ * NOTA (cambio - filtro de fecha): la tabla ahora solo muestra reservas de
+ * hoy en adelante (filter con `hoy`), ordenadas ascendente (la más próxima
+ * primero). Las reservas pasadas ya no aparecen en esta vista.
  * ============================================================================
  */
 
@@ -52,6 +56,10 @@ export default function MisReservasPage() {
   const [cancelandoId, setCancelandoId] = useState<number | null>(null);
   const hoy = new Date();
   hoy.setHours(0, 0, 0, 0);
+
+  const reservasVisibles = [...inquilinoReservasData]
+    .filter(r => new Date(r.fecha) >= hoy)
+    .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
 
   const verDetalleReserva = (id: number) => {
     const reserva = inquilinoReservasData.find(r => r.id === id);
@@ -129,10 +137,10 @@ export default function MisReservasPage() {
             <tr><th>Área</th><th>Fecha</th><th>Horario</th><th>Personas</th><th>Estado</th><th>Pago</th><th>Acciones</th></tr>
           </thead>
           <tbody id="misReservasBody">
-            {inquilinoReservasData.length === 0 ? (
+            {reservasVisibles.length === 0 ? (
               <tr><td colSpan={7} style={{ textAlign: 'center', padding: 'var(--space-4)', color: 'var(--text-muted)' }}>No tienes reservas registradas.</td></tr>
             ) : (
-              [...inquilinoReservasData].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()).map(r => {
+              reservasVisibles.map(r => {
                 const estadoBadge = r.estado === 'Confirmada' ? 'badge-success' : r.estado === 'Pendiente' ? 'badge-warning' : r.estado === 'Reservado' ? 'badge-info' : 'badge-error';
                 const pagoBadge = r.pago_estado === 'Pagado' ? 'badge-success' : r.pago_estado === 'Reembolsado' ? 'badge-info' : r.pago_estado === 'SinReembolso' ? 'badge-warning' : 'badge-warning';
                 return (

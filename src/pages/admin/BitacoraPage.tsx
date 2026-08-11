@@ -19,7 +19,7 @@
  * Componentes que utiliza
  * - PageHeader (título del módulo)
  * - bitacoraService (consumo de GET /api/bitacora)
- * - useTheme (tema del visor JSON según claro/oscuro)
+ * - usePreferencias (tema del visor JSON según claro/oscuro)
  *
  * ============================================================================
  */
@@ -30,7 +30,7 @@ import { darkTheme } from '@uiw/react-json-view/dark';
 import { lightTheme } from '@uiw/react-json-view/light';
 import PageHeader from '../../components/PageHeader';
 import { bitacoraService } from '../../services/bitacoraService';
-import { useTheme } from '../../context/ThemeContext';
+import { usePreferencias } from '../../context/PreferenciasContext';
 import type { BitacoraRegistro } from '../../types';
 
 // ------------------------------------------------------------
@@ -214,7 +214,13 @@ const FILTROS_INICIALES: FiltrosBitacora = {
 };
 
 export default function BitacoraPage() {
-  const { appliedTheme } = useTheme();
+  const { tema } = usePreferencias();
+  const appliedTheme = useMemo<'dark' | 'light'>(() => {
+    if (tema === 'system') {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    return tema;
+  }, [tema]);
 
   // Filtros aplicados (discretos se aplican al cambiar; texto con debounce)
   const [filtros, setFiltros] = useState<FiltrosBitacora>(FILTROS_INICIALES);

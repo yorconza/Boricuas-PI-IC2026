@@ -3,22 +3,13 @@
  * Archivo: DataContext.tsx
  * ============================================================================
  *
- * NOTA (cambio - protección de rutas con JWT):
+ * NOTA (protección de rutas con JWT):
  * Este provider se comunica con el backend usando el cliente compartido `api`
  * (services/apiClient.ts) en lugar de fetch() crudo. Razones:
  *
- * 1. Las rutas de /api/personal, /residentes, /contratos y /reservas ahora exigen
- *    un token JWT (middlewares authenticateToken + validateSessionAndSetContext
- *    + authorizeRole('Administrador')). El api client adjunta automáticamente el
- *    header `Authorization: Bearer <token>` en cada petición.
- * 2. Si la sesión expira (respuesta 401), el api client limpia el localStorage y
- *    redirige a /login automáticamente (sin bucles: login/register no envían token).
- * 3. Ya NO se envía `id_usuario_actual` desde el cliente: el backend lo toma del
- *    token firmado (req.user.id_usuario), así un atacante no puede suplantar a
- *    otro administrador inventando un id.
- *
- * Antes: fetch(`${API_URL}/personal?id_usuario_actual=...`) sin token -> tras
- * proteger las rutas, esas llamadas habrían respondido 401 y la app se habría roto.
+ * 1. Las rutas exigen token JWT (Authorization: Bearer <token>).
+ * 2. Si la sesión expira (401), limpia localStorage y redirige a /login.
+ * 3. `id_usuario_actual` lo deduce el backend del JWT (req.user.id_usuario).
  * ============================================================================
  */
 
@@ -27,9 +18,6 @@ import type {
   Area, Reserva, Visitante, Personal, Residente, Contrato, Departamento, Pago,
   ActivityItem, AlertaItem, NotificationItem, AreaInquilino, UserRole
 } from '../types';
-// NOTA (cambio): Personal, Residentes, Contratos y Reservas (admin) ya se cargan
-// desde el backend (recargarPersonal/Residentes/Contratos/Reservas), por eso ya
-// NO se importan sus datos mock de sampleData.ts.
 import {
   initialAreasData, initialPagosData,
   visitasData, areasDisponibles, inquilinoReservas, inquilinoVisitantes,
@@ -101,6 +89,8 @@ interface ReservaRaw {
   estado?: string;
   cantidad_personas?: number;
   personas?: number;
+  costo?: number;
+  estado_pago?: string;
 }
 
 export interface CrearReservaDTO {
@@ -116,6 +106,31 @@ export interface EditarReservaDTO {
   hora_inicio: string;
   hora_fin: string;
   cantidad_personas: number;
+}
+
+// --- Interfaces para el Dashboard ---
+export interface DashboardKPIs {
+  reservas_hoy: number;
+  visitas_registradas: number;
+  contratos_activos: number;
+  areas_ocupadas: number;
+  ingresos_del_dia: number; // antes: ingresos_dia (no coincidía con el backend, siempre daba 0/₡0)
+}
+
+export interface DashboardData {
+  kpis: DashboardKPIs;
+  proximasReservas: unknown[];
+  alertas: unknown[]; // antes faltaba este campo: se perdía aunque el backend lo mandara
+  actividadReciente: unknown[];
+}
+
+interface DashboardApiResponse {
+  status?: string;
+  data?: DashboardData;
+  kpis?: DashboardKPIs;
+  proximasReservas?: unknown[];
+  alertas?: unknown[];
+  actividadReciente?: unknown[];
 }
 
 interface DataContextType {
@@ -142,6 +157,10 @@ interface DataContextType {
   guardiaNotifications: NotificationItem[];
   inquilinoNotifications: NotificationItem[];
 
+  // Dashboard State & Method
+  dashboardData: DashboardData | null;
+  recargarDashboard: () => Promise<void>;
+
   addActivity: (descripcion: string, icono?: string, color?: string) => void;
   addAlerta: (descripcion: string, prioridad: string, icono?: string, color?: string) => void;
   addNotification: (role: UserRole, titulo: string, mensaje: string, icono?: string) => void;
@@ -149,11 +168,13 @@ interface DataContextType {
   markAllRead: (role: UserRole) => void;
 
   // Personal CRUD
+  recargarPersonal: () => Promise<void>;
   crearPersonal: (nombre: string, correo: string, contrasena: string, telefono: string, cedula: string, correoContacto?: string) => Promise<void>;
   editarPersonal: (id_usuario: number, nombre: string, correo: string, telefono: string, cedula: string, correoContacto?: string) => Promise<void>;
   cambiarEstadoPersonal: (id_usuario: number, activar: boolean) => Promise<void>;
 
   // Residentes CRUD
+  recargarResidentes: () => Promise<void>;
   crearResidente: (nombre: string, correo: string, contrasena: string, telefono: string, cedula: string) => Promise<void>;
   editarResidente: (id_usuario: number, nombre: string, correo: string, telefono: string, cedula: string) => Promise<void>;
   cambiarEstadoResidente: (id_usuario: number, activar: boolean) => Promise<void>;
@@ -179,9 +200,6 @@ interface DataContextType {
 const DataContext = createContext<DataContextType | null>(null);
 
 export function DataProvider({ children }: { children: ReactNode }) {
-  // NOTA (cambio): Personal, Residentes, Contratos y Reservas (admin) se cargan
-  // desde el backend al montar el provider (recargar*). Se inicializan vacíos y
-  // se reemplazan con los datos reales de la DB; el mock de sampleData ya no se usa.
   const [areasData, setAreasData] = useState<Area[]>(initialAreasData);
   const [personalData, setPersonalData] = useState<Personal[]>([]);
   const [residentesData, setResidentesData] = useState<Residente[]>([]);
@@ -193,28 +211,20 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [areasDisponiblesData, setAreasDisponibles] = useState<AreaInquilino[]>(areasDisponibles);
   const [inquilinoReservasData, setInquilinoReservas] = useState<Reserva[]>(inquilinoReservas);
   const [inquilinoVisitantesData, setInquilinoVisitantes] = useState<Visitante[]>(inquilinoVisitantes);
-
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [activityLog, setActivityLog] = useState<ActivityItem[]>(getInitialActivityLog);
   const [alertas, setAlertas] = useState<AlertaItem[]>(getInitialAlertas);
   const [adminNotifications, setAdminNotifications] = useState<NotificationItem[]>(getInitialAdminNotifications);
   const [guardiaNotifications, setGuardiaNotifications] = useState<NotificationItem[]>(getInitialGuardiaNotifications);
   const [inquilinoNotifications, setInquilinoNotifications] = useState<NotificationItem[]>(getInitialInquilinoNotifications);
-
-  // El id_usuario SIEMPRE es el del administrador autenticado (nunca un id fijo):
-  // el SP valida el rol contra este id real y rechaza cualquier otro.
   const { usuario, verificacion2FA } = useAuth();
   const idAdminActual = usuario?.idUsuario;
 
   // --- Reservas / Visitantes del Inquilino (rol Inquilino) ---
-  // NOTA (cambio): antes inquilinoReservasData/inquilinoVisitantesData quedaban
-  // fijos en los mocks de sampleData.ts y NUNCA se reemplazaban por datos reales
-  // del backend. Estas dos funciones consultan /api/inquilino/reservas y
-  // /api/inquilino/visitantes (protegidas con authorizeRole('Inquilino')) y
-  // reemplazan el estado con la respuesta real.
   const recargarReservasInquilino = useCallback(async () => {
     if (!usuario || usuario.rol !== 'Inquilino') return;
+
     try {
-      // El api client adjunta el Bearer token automáticamente y redirige a /login si expira.
       const data = await inquilinoService.obtenerMisReservas();
 
       if (!Array.isArray(data)) {
@@ -222,13 +232,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // NOTA (cambio - fix mapeo de columnas): sp_ListarMisReservas devuelve
-      // id_reserva / cantidad_personas / estado_pago (no id / personas /
-      // pago_estado como se asumía), y fecha/hora_inicio/hora_fin vienen como
-      // ISO completo de SQL Server (ej. "1970-01-01T13:00:00.000Z" para TIME)
-      // en vez de "YYYY-MM-DD"/"HH:mm:ss" — toDateOnly/toTimeOnly normalizan
-      // eso para que formatHoraAMPM y el resto de la UI sigan funcionando
-      // igual que con los datos mock.
       const transformed: Reserva[] = data.map((r) => ({
         id: r.id_reserva,
         area: r.area,
@@ -240,6 +243,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         costo: r.costo,
         pago_estado: r.estado_pago,
       }));
+
       setInquilinoReservas(transformed);
     } catch (err) {
       console.error('Error de red al recargar reservas del inquilino:', err);
@@ -248,8 +252,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const recargarVisitantesInquilino = useCallback(async () => {
     if (!usuario || usuario.rol !== 'Inquilino') return;
+
     try {
-      // El api client adjunta el Bearer token automáticamente y redirige a /login si expira.
       const data = await inquilinoService.obtenerVisitantes();
 
       if (!Array.isArray(data)) {
@@ -257,10 +261,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // NOTA (cambio - fix mapeo de columnas): sp_ListarMisVisitantes devuelve
-      // id_visitante / nombre_completo / documento_identidad (no id / nombre /
-      // documento como se asumía), y hora_esperada viene como ISO completo de
-      // SQL Server — toTimeOnly la normaliza a "HH:mm:ss" para formatHoraAMPM.
       const transformed: Visitante[] = data.map((v) => ({
         id: v.id_visitante,
         nombre: v.nombre_completo,
@@ -270,21 +270,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
         estado: v.estado,
         motivo_rechazo: v.motivo_rechazo ?? undefined,
       }));
+
       setInquilinoVisitantes(transformed);
     } catch (err) {
       console.error('Error de red al recargar visitantes del inquilino:', err);
     }
   }, [usuario]);
 
-  // NOTA (cambio): areasDisponiblesData quedaba fijo en el mock de sampleData.ts
-  // y nunca se reemplazaba por datos reales. sp_ListarAreasDisponibles devuelve
-  // id_area/capacidad_max/estado (no id/capacidad/disponible como asumía el
-  // tipo AreaInquilino de la UI), y hora_apertura/hora_cierre vienen como ISO
-  // completo de SQL Server (ej. "1970-01-01T06:00:00.000Z") en vez del número
-  // de hora que espera la UI (horario_inicio/horario_fin) — se extrae con
-  // getUTCHours() para no arrastrar el desfase de zona horaria del cliente.
   const recargarAreasDisponibles = useCallback(async () => {
     if (!usuario || usuario.rol !== 'Inquilino') return;
+
     try {
       const data = await inquilinoService.obtenerAreasDisponibles();
 
@@ -303,18 +298,39 @@ export function DataProvider({ children }: { children: ReactNode }) {
         costo_por_hora: a.costo_por_hora,
         disponible: a.estado === 'Disponible',
       }));
+
       setAreasDisponibles(transformed);
     } catch (err) {
       console.error('Error de red al recargar áreas disponibles:', err);
     }
   }, [usuario]);
 
+  // --- Dashboard Consulta ---
+  const recargarDashboard = useCallback(async () => {
+    if (!idAdminActual) return;
+
+    try {
+      const res = await api.get<DashboardApiResponse>('/dashboard');
+
+      if (res && res.data) {
+        setDashboardData(res.data);
+      } else if (res && res.kpis) {
+        setDashboardData({
+          kpis: res.kpis,
+          proximasReservas: res.proximasReservas ?? [],
+          alertas: res.alertas ?? [],
+          actividadReciente: res.actividadReciente ?? []
+        });
+      }
+    } catch (err) {
+      console.error('Error de red al recargar el dashboard:', err);
+    }
+  }, [idAdminActual]);
+
   // --- Personal CRUD ---
   const recargarPersonal = useCallback(async () => {
-    // Nunca disparar sin sesión: requiere token JWT de admin autenticado.
     if (!idAdminActual) return;
     try {
-      // El api client adjunta el Bearer token automáticamente y redirige a /login si expira.
       const data = await api.get<PersonalRaw[]>('/personal');
 
       if (!Array.isArray(data)) {
@@ -322,7 +338,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const transformed = data.map((row: PersonalRaw) => ({
+      const transformed: Personal[] = data.map((row: PersonalRaw) => ({
         id_usuario: row.id_usuario,
         nombre: row.nombre_completo,
         correo: row.correo,
@@ -340,10 +356,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [idAdminActual]);
 
   const crearPersonal = useCallback(async (nombre: string, correo: string, contrasena: string, telefono: string, cedula: string, correoContacto?: string) => {
-    // NOTA (cambio): la contraseña SIEMPRE la escribe el admin en el formulario
-    // (nunca un valor fijo); el backend la hashea con bcrypt ANTES de guardarla.
-    // El id_usuario_actual ahora lo toma el backend del JWT (req.user).
-    // correo_contacto: correo real donde Admin/Guarda reciben el código 2FA.
     await api.post('/personal', { nombre_completo: nombre, correo, correo_contacto: correoContacto || null, contrasena, telefono, cedula, foto_perfil: null });
     await recargarPersonal();
   }, [recargarPersonal]);
@@ -363,7 +375,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const recargarResidentes = useCallback(async () => {
     if (!idAdminActual) return;
     try {
-      // El api client adjunta el Bearer token automáticamente y redirige a /login si expira.
       const data = await api.get<ResidenteRaw[]>('/residentes');
 
       if (!Array.isArray(data)) {
@@ -389,9 +400,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [idAdminActual]);
 
   const crearResidente = useCallback(async (nombre: string, correo: string, contrasena: string, telefono: string, cedula: string) => {
-    // NOTA (cambio): la contraseña la escribe el admin en el formulario (nunca un
-    // valor fijo); el backend la hashea con bcrypt ANTES de guardarla.
-    // El id_usuario_actual ahora lo toma el backend del JWT (req.user).
     await api.post('/residentes', {
       nombre_completo: nombre,
       correo,
@@ -401,7 +409,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     });
 
     await recargarResidentes();
-  }, [recargarResidentes]);
+    await recargarDashboard(); // "Actividad reciente" muestra altas de residentes
+  }, [recargarResidentes, recargarDashboard]);
 
   const editarResidente = useCallback(async (id_usuario: number, nombre: string, correo: string, telefono: string, cedula: string) => {
     await api.put(`/residentes/${id_usuario}`, {
@@ -423,9 +432,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [recargarResidentes]);
 
   // --- Departamentos CRUD ---
-  // NOTA: recargarDepartamentos se define ANTES de recargarContratos porque
-  // ese callback lo invoca para mantener los estados (Disponible/Ocupado) al
-  // día con el ciclo de vida del contrato.
   const recargarDepartamentos = useCallback(async () => {
     if (!idAdminActual) return;
     try {
@@ -455,7 +461,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const recargarContratos = useCallback(async () => {
     if (!idAdminActual) return;
     try {
-      // El api client adjunta el Bearer token automáticamente y redirige a /login si expira.
       const data = await api.get<ContratoRaw[]>('/contratos');
 
       if (!Array.isArray(data)) {
@@ -472,18 +477,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
         fecha_inicio: row.fecha_inicio?.split('T')[0] || row.fecha_inicio,
         fecha_fin: row.fecha_fin?.split('T')[0] || row.fecha_fin,
         estado: row.estado,
-        // Montos: se rellenan con 0 si la vista aún no los expone.
         monto_mensual: row.monto_mensual ?? 0,
         monto_deposito: row.monto_deposito ?? 0
       }));
 
       setContratosData(transformed);
-
-      // Sincronización de departamentos: el ciclo de vida del contrato cambia
-      // el estado del departamento (Ocupado al crear, Disponible al finalizar
-      // por fecha_fin). Al recargar contratos se recargan también los
-      // departamentos para que el módulo quede al día SIN necesidad de
-      // refrescar la página.
       await recargarDepartamentos();
     } catch (err) {
       console.error('Error de red al recargar contratos:', err);
@@ -498,14 +496,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
     monto_mensual: number;
     monto_deposito: number;
   }) => {
-    // El id_usuario_actual lo toma el backend del JWT (req.user); el SP
-    // sp_Contrato_Insertar busca al inquilino por CÉDULA y asigna el
-    // departamento por su NÚMERO (no por id).
     await api.post('/contratos', datos);
 
     await recargarContratos();
     await recargarResidentes();
-  }, [recargarContratos, recargarResidentes]);
+    await recargarDashboard(); // 🔑 antes faltaba: por esto "Contratos activos" no se actualizaba en la tarjeta
+  }, [recargarContratos, recargarResidentes, recargarDashboard]);
 
   const editarContrato = useCallback(async (
     id_contrato: number,
@@ -516,15 +512,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
       monto_deposito: number;
     }
   ) => {
-    // NOTA: el departamento NO se edita en el contrato (se asigna solo al crear).
     await api.put(`/contratos/${id_contrato}`, datos);
 
     await recargarContratos();
-    // Recarga residentes también: si al recargar contratos la auto-finalización
-    // (fecha_fin vencida) cambió el contrato del inquilino, su estado_contrato
-    // en el módulo de residentes queda al día sin refrescar la página.
     await recargarResidentes();
-  }, [recargarContratos, recargarResidentes]);
+    await recargarDashboard(); // las fechas editadas pueden afectar la alerta de "vence en N días"
+  }, [recargarContratos, recargarResidentes, recargarDashboard]);
 
   const crearDepartamento = useCallback(async (numero: string, piso: number | null, metrosCuadrados: number | null) => {
     await api.post('/departamentos', { numero, piso, metros_cuadrados: metrosCuadrados });
@@ -549,7 +542,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const recargarReservas = useCallback(async () => {
     if (!idAdminActual) return;
     try {
-      // El api client adjunta el Bearer token automáticamente y redirige a /login si expira.
       const data = await api.get<ReservaRaw[]>('/reservas');
 
       if (!Array.isArray(data)) {
@@ -562,7 +554,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
         const rawFecha = row.fecha || row.fecha_reserva || '';
         const fechaFormateada = rawFecha ? String(rawFecha).split('T')[0] : '';
 
-        // Formateo de hora: Recorta cadenas de microsegundos de SQL Server ("14:00:00.0000000" -> "14:00")
         const hInicio = row.hora_inicio ? String(row.hora_inicio).slice(0, 5) : '';
         const hFin = row.hora_fin ? String(row.hora_fin).slice(0, 5) : '';
         const horarioFormateado = hInicio && hFin ? `${hInicio} - ${hFin}` : (hInicio || '-');
@@ -573,9 +564,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
           residente: row.residente || row.nombre_residente || row.nombre_completo || 'Sin asignar',
           fecha: fechaFormateada,
           hora: horarioFormateado,
+          hora_inicio: hInicio,
+          hora_fin: hFin,
           estado: row.estado || 'Confirmada',
-          personas: row.cantidad_personas ?? row.personas ?? 1
-        } as unknown as Reserva;
+          personas: row.cantidad_personas ?? row.personas ?? 1,
+          costo: row.costo ?? 0,
+          pago_estado: row.estado_pago ?? 'Pendiente'
+        };
       });
 
       setReservasData(transformed);
@@ -586,30 +581,28 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [idAdminActual]);
 
   const crearReserva = useCallback(async (dto: CrearReservaDTO) => {
-    // El id_usuario_actual ahora lo toma el backend del JWT (req.user).
     await api.post('/reservas', dto);
 
     await recargarReservas();
-  }, [recargarReservas]);
+    await recargarDashboard(); // afecta reservas_hoy, areas_ocupadas y "Próximas reservas"
+  }, [recargarReservas, recargarDashboard]);
 
   const editarReserva = useCallback(async (id_reserva: number, dto: EditarReservaDTO) => {
     await api.put(`/reservas/${id_reserva}`, dto);
 
     await recargarReservas();
-  }, [recargarReservas]);
+    await recargarDashboard();
+  }, [recargarReservas, recargarDashboard]);
 
   const cancelarReserva = useCallback(async (id_reserva: number) => {
     await api.patch(`/reservas/${id_reserva}/cancelar`);
 
     await recargarReservas();
-  }, [recargarReservas]);
+    await recargarDashboard();
+  }, [recargarReservas, recargarDashboard]);
 
   // --- Carga Inicial ---
   useEffect(() => {
-    // No cargar datos hasta que la sesión esté restaurada Y el 2FA esté
-    // verificado: con el token temporal (2faVerified: false) el backend responde
-    // 403 "Se requiere la verificación 2FA". Al completar el 2FA, verificacion2FA
-    // cambia a true y el efecto se re-ejecuta con el token definitivo.
     if (!usuario || !verificacion2FA) return;
 
     // La carga inicial de datos al montar el provider es intencional: los
@@ -628,6 +621,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       recargarContratos();
       recargarDepartamentos();
       recargarReservas();
+      recargarDashboard();
     } else if (usuario.rol === 'Inquilino') {
       recargarReservasInquilino();
       recargarVisitantesInquilino();
@@ -635,7 +629,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
     // Guarda no necesita ninguna de estas listas por ahora.
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, [usuario, verificacion2FA, recargarPersonal, recargarResidentes, recargarContratos, recargarDepartamentos, recargarReservas, recargarReservasInquilino, recargarVisitantesInquilino, recargarAreasDisponibles]);
+  }, [usuario, verificacion2FA, recargarPersonal, recargarResidentes, recargarContratos, recargarDepartamentos, recargarReservas, recargarDashboard, recargarReservasInquilino, recargarVisitantesInquilino, recargarAreasDisponibles]);
 
   // --- Helpers Notificaciones / Actividad ---
   const addActivity = useCallback((descripcion: string, icono = 'fa-circle', color = 'var(--accent)') => {
@@ -698,10 +692,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
       inquilinoVisitantesData, setInquilinoVisitantes, recargarVisitantesInquilino,
       activityLog, alertas,
       adminNotifications, guardiaNotifications, inquilinoNotifications,
+      dashboardData, recargarDashboard,
       addActivity, addAlerta, addNotification,
       markAsRead, markAllRead,
-      crearPersonal, editarPersonal, cambiarEstadoPersonal,
-      crearResidente, editarResidente, cambiarEstadoResidente,
+      recargarPersonal, crearPersonal, editarPersonal, cambiarEstadoPersonal,
+      recargarResidentes, crearResidente, editarResidente, cambiarEstadoResidente,
       recargarContratos, crearContrato, editarContrato,
       recargarDepartamentos, crearDepartamento, editarDepartamento, cambiarEstadoDepartamento,
       recargarReservas, crearReserva, editarReserva, cancelarReserva

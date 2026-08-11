@@ -15,154 +15,244 @@
  * ============================================================================
  */
 
-import { useState, useCallback } from 'react';
-import PageHeader from '../../components/PageHeader';
-import Drawer from '../../components/Drawer';
-import { useData } from '../../context/DataContext';
-import { useAlert } from '../../components/Alert';
-import type { Pago } from '../../types';
+/**
+ * ============================================================================
+ * Archivo: AdminDashboard.tsx
+ * ============================================================================
+ */
 
-export default function PagosPage() {
-  const { pagosData, addActivity, addNotification } = useData();
-  const { showAlert } = useAlert();
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [drawerMode, setDrawerMode] = useState<'view' | 'create'>('view');
-  const [selectedItem, setSelectedItem] = useState<Pago | null>(null);
+import { useEffect, useState } from 'react';
 
-  const openView = (item: Pago) => {
-    setSelectedItem(item);
-    setDrawerMode('view');
-    setDrawerOpen(true);
-  };
+interface AdminDashboardProps {
+  onNavigate: (page: string) => void;
+}
 
-  const openCreate = () => {
-    setSelectedItem(null);
-    setDrawerMode('create');
-    setDrawerOpen(true);
-  };
+// Interfaces estrictas — alineadas a lo que devuelven realmente los SPs
+// (sp_Dashboard_ObtenerMetricas / sp_Dashboard_ObtenerDatos)
+interface KPI {
+  reservas_hoy: number;
+  visitas_registradas: number;
+  contratos_activos: number;
+  areas_ocupadas: number;
+  ingresos_del_dia: number; // antes: ingresos_dia (no coincidía con el SP, siempre daba ₡0)
+}
 
-  const handleSave = useCallback(() => {
-    if (drawerMode === 'create') {
-      const residente = (document.getElementById('pagoResidente') as HTMLInputElement)?.value?.trim() || '';
-      const monto = (document.getElementById('pagoMonto') as HTMLInputElement)?.value?.trim() || '';
+interface Reserva {
+  id_reserva: number;
+  hora: string;
+  area_comun: string;
+  residente: string;
+  estado: string;
+}
 
-      // NOTA (cambio para compilar con `tsc -b`): se eliminó la construcción de
-      // `newItem`/`newId` (y las variables que solo lo alimentaban: concepto,
-      // metodo, fecha) porque nunca se usaban (TS6133: declarado pero sin uso).
-      // El registro del pago solo se refleja vía actividad y notificación.
-      addActivity(`Pago registrado de <strong>${residente}</strong> por ${monto}`, 'fa-credit-card', 'var(--success)');
-      addNotification('admin', 'Nuevo pago', `${residente} realizó un pago de ${monto}.`, 'fa-credit-card');
-      setDrawerOpen(false);
-      showAlert('Pago registrado correctamente.', { titulo: 'Éxito', tipo: 'success' });
-    } else {
-      setDrawerOpen(false);
-    }
-  }, [drawerMode, addActivity, addNotification, showAlert]);
+interface Alerta {
+  tipo_alerta: string;
+  mensaje: string;
+  prioridad: 'Alta' | 'Media' | 'Baja';
+  fecha_evento: string;
+}
 
-  const renderDrawerContent = () => {
-    if (drawerMode === 'view' && selectedItem) {
-      const p = selectedItem;
-      return (
-        <div className="detail-card">
-          <div className="detail-row">
-            <span className="detail-label">Residente</span>
-            <span className="detail-value">{p.residente}</span>
-          </div>
-          <div className="detail-row">
-            <span className="detail-label">Concepto</span>
-            <span className="detail-value">{p.concepto}</span>
-          </div>
-          <div className="detail-row">
-            <span className="detail-label">Monto</span>
-            <span className="detail-value" style={{ fontWeight: 600, color: 'var(--success)' }}>{p.monto}</span>
-          </div>
-          <div className="detail-row">
-            <span className="detail-label">Fecha</span>
-            <span className="detail-value">{p.fecha}</span>
-          </div>
-          <div className="detail-row">
-            <span className="detail-label">Método</span>
-            <span className="detail-value">{p.metodo}</span>
-          </div>
-          <div className="detail-row">
-            <span className="detail-label">Estado</span>
-            <span className="detail-value">
-              <span className={`badge ${p.estado === 'Pagado' ? 'badge-success' : 'badge-warning'}`}>
-                {p.estado}
-              </span>
-            </span>
-          </div>
-        </div>
-      );
-    }
+interface Actividad {
+  descripcion: string;
+  fecha_evento: string;    // antes: fecha (el SP no devuelve esta columna)
+  color_indicador: string; // antes: id_bitacora / tabla_afectada / minutos_transcurridos (no existen en el SP)
+}
 
+interface DashboardData {
+  kpis: KPI;
+  proximasReservas: Reserva[];
+  alertas: Alerta[];
+  actividadReciente: Actividad[];
+}
+
+const COLOR_INDICADOR: Record<string, string> = {
+  verde: '#22c55e',
+  amarillo: '#eab308',
+  azul: '#3b82f6',
+};
+
+export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchDashboardData = async (): Promise<void> => {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem('token');
+
+        // Nota: Asegúrate de ajustar la URL si tu Backend corre en otro puerto (ej: http://localhost:4000/api/dashboard)
+        const response = await fetch('http://localhost:4000/api/dashboard', {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          throw new Error('El servidor no respondió con JSON válido (revisa si el backend está encendido).');
+        }
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.message || `Error ${response.status}: No se pudieron obtener los datos.`);
+        }
+
+        setData(result as DashboardData);
+      } catch (err: unknown) {
+        console.error('Error cargando Dashboard:', err);
+        const errorMessage = err instanceof Error
+          ? err.message
+          : 'No se pudieron cargar los datos del servidor.';
+        setError(errorMessage);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+    // ⚠️ TODO: este efecto solo corre al montar el componente. Si tu router mantiene
+    // AdminDashboard montado al navegar a otras páginas (en vez de desmontarlo/remontarlo),
+    // los KPIs no se van a refrescar después de crear/editar contratos, reservas, etc.
+    // Opciones: (a) hacer que el componente se desmonte al salir del Dashboard,
+    // (b) exponer un refetch y llamarlo desde onNavigate al volver a 'dashboard',
+    // o (c) usar una librería de data-fetching (React Query/SWR) con invalidación.
+  }, []);
+
+  if (loading) {
+    return <p style={{ color: 'var(--text-muted)', padding: 'var(--space-4)' }}>Cargando dashboard...</p>;
+  }
+
+  if (error || !data) {
     return (
-      <div className="form-section">
-        <h4>Información del pago</h4>
-        <div className="form-group">
-          <label>Residente</label>
-          <input id="pagoResidente" type="text" placeholder="Nombre del residente" />
-        </div>
-        <div className="form-group">
-          <label>Concepto</label>
-          <input id="pagoConcepto" type="text" placeholder="Concepto del pago" />
-        </div>
-        <div className="form-group">
-          <label>Monto</label>
-          <input id="pagoMonto" type="text" placeholder="₡0" />
-        </div>
-        <div className="form-group">
-          <label>Método</label>
-          <select id="pagoMetodo">
-            <option>Transferencia</option>
-            <option>Efectivo</option>
-            <option>Tarjeta</option>
-          </select>
-        </div>
+      <div style={{ padding: 'var(--space-4)' }}>
+        <p style={{ color: 'var(--danger-color)', marginBottom: 'var(--space-2)' }}>
+          {error || 'Sin datos disponibles'}
+        </p>
+        <button className="btn" onClick={() => window.location.reload()}>Reintentar</button>
       </div>
     );
-  };
+  }
+
+  const {
+    kpis = { reservas_hoy: 0, visitas_registradas: 0, contratos_activos: 0, areas_ocupadas: 0, ingresos_del_dia: 0 },
+    proximasReservas = [],
+    alertas = [],
+    actividadReciente = []
+  } = data;
 
   return (
     <>
-      <PageHeader title="Pagos">
-        <button className="btn-primary" onClick={openCreate}>
-          <i className="fas fa-plus"></i> Registrar pago
-        </button>
-      </PageHeader>
-      <div className="payment-summary">
-        <div className="stat-card"><div className="stat-label">Total recaudado</div><div className="stat-value">₡12.450</div></div>
-        <div className="stat-card"><div className="stat-label">Pendientes</div><div className="stat-value">₡2.300</div></div>
-        <div className="stat-card"><div className="stat-label">Pagados hoy</div><div className="stat-value">₡1.280</div></div>
+      <h2 style={{ marginBottom: 'var(--space-4)' }}>Dashboard</h2>
+
+      {/* KPI GRID */}
+      <div className="kpi-grid">
+        <div className="kpi-card" onClick={() => onNavigate('reservas')} tabIndex={0} role="button">
+          <div className="kpi-icon"><i className="fas fa-calendar-day"></i></div>
+          <div className="kpi-label">Reservas hoy</div>
+          <div className="kpi-value" id="kpiReservasHoy">{kpis.reservas_hoy}</div>
+        </div>
+
+        <div className="kpi-card" onClick={() => onNavigate('visitas')} tabIndex={0} role="button">
+          <div className="kpi-icon"><i className="fas fa-user-check"></i></div>
+          <div className="kpi-label">Visitas registradas</div>
+          <div className="kpi-value">{kpis.visitas_registradas}</div>
+        </div>
+
+        <div className="kpi-card" onClick={() => onNavigate('contratos')} tabIndex={0} role="button">
+          <div className="kpi-icon"><i className="fas fa-file-contract"></i></div>
+          <div className="kpi-label">Contratos activos</div>
+          <div className="kpi-value">{kpis.contratos_activos}</div>
+        </div>
+
+        <div className="kpi-card" onClick={() => onNavigate('areas')} tabIndex={0} role="button">
+          <div className="kpi-icon"><i className="fas fa-people-arrows"></i></div>
+          <div className="kpi-label">Áreas ocupadas</div>
+          <div className="kpi-value">{kpis.areas_ocupadas}</div>
+        </div>
+
+        <div className="kpi-card" onClick={() => onNavigate('pagos')} tabIndex={0} role="button">
+          <div className="kpi-icon"><i className="fas fa-coins"></i></div>
+          <div className="kpi-label">Ingresos del día</div>
+          <div className="kpi-value">₡{(kpis.ingresos_del_dia || 0).toLocaleString('es-CR')}</div>
+        </div>
       </div>
-      <table className="table-modern">
-        <thead><tr><th>Residente</th><th>Concepto</th><th>Monto</th><th>Fecha</th><th>Método</th><th>Estado</th><th>Acciones</th></tr></thead>
-        <tbody>
-          {pagosData.map(p => (
-            <tr key={p.id}>
-              <td data-label="Residente">{p.residente}</td>
-              <td data-label="Concepto">{p.concepto}</td>
-              <td data-label="Monto">{p.monto}</td>
-              <td data-label="Fecha">{p.fecha}</td>
-              <td data-label="Método">{p.metodo}</td>
-              <td data-label="Estado"><span className={`badge ${p.estado === 'Pagado' ? 'badge-success' : 'badge-warning'}`}>{p.estado}</span></td>
-              <td data-label="Acciones" className="action-icons">
-                <a onClick={() => openView(p)} aria-label="Ver" style={{ cursor: 'pointer' }}><i className="fas fa-eye"></i></a>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <Drawer
-        isOpen={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        title={drawerMode === 'create' ? 'Registrar pago' : 'Detalle de pago'}
-        onSave={drawerMode === 'view' ? undefined : handleSave}
-        saveText="Registrar"
-        size="md"
-      >
-        {renderDrawerContent()}
-      </Drawer>
+
+      {/* SECCIONES SECUNDARIAS */}
+      <div className="dashboard-grid">
+        {/* PRÓXIMAS RESERVAS */}
+        <div className="card">
+          <div className="card-header">
+            <h3>Próximas reservas</h3>
+            <a href="#reservas" onClick={e => { e.preventDefault(); onNavigate('reservas'); }}>Ver todas</a>
+          </div>
+          {proximasReservas.length === 0 ? (
+            <p style={{ color: 'var(--text-muted)', padding: 'var(--space-2) 0' }}>No hay reservas programadas.</p>
+          ) : (
+            proximasReservas.map(reserva => (
+              <div key={reserva.id_reserva} className="next-reservation-item">
+                <span className="reservation-time">{reserva.hora}</span>
+                <span className="reservation-info">
+                  <strong>{reserva.area_comun}</strong> · {reserva.residente}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* ALERTAS ADMINISTRATIVAS */}
+        <div className="card">
+          <div className="card-header"><h3>Alertas administrativas</h3></div>
+          <div id="alertasContainer">
+            {alertas.length === 0 ? (
+              <p style={{ color: 'var(--text-muted)', padding: 'var(--space-2) 0' }}>No hay alertas.</p>
+            ) : (
+              alertas.map((alerta, index) => (
+                <div key={index} className="alert-item">
+                  <span className="alert-text">{alerta.mensaje}</span>
+                  <span className="alert-badge">
+                    <span className={`badge ${
+                      alerta.prioridad === 'Alta'
+                        ? 'badge-priority-high'
+                        : alerta.prioridad === 'Media'
+                        ? 'badge-priority-medium'
+                        : 'badge-priority-low'
+                    }`}>
+                      {alerta.prioridad}
+                    </span>
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* ACTIVIDAD RECIENTE */}
+        <div className="card">
+          <div className="card-header">
+            <h3>Actividad reciente</h3>
+            <a href="#actividad" onClick={e => { e.preventDefault(); onNavigate('actividad'); }}>Ver todas</a>
+          </div>
+          <div id="actividadContainer">
+            {actividadReciente.length === 0 ? (
+              <p style={{ color: 'var(--text-muted)', padding: 'var(--space-2) 0' }}>No hay actividad reciente.</p>
+            ) : (
+              actividadReciente.map((item, index) => (
+                <div key={index} className="activity-item">
+                  <span
+                    className="activity-dot"
+                    style={{ background: COLOR_INDICADOR[item.color_indicador] || 'var(--primary-color, #007bff)' }}
+                  ></span>
+                  <span className="activity-text">{item.descripcion}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
     </>
   );
 }
