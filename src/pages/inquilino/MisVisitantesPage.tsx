@@ -8,22 +8,42 @@
  * ver detalle de cada visitante y cancelar visitas pendientes.
  *
  * Componentes que utiliza
- * - useData (contexto: inquilinoVisitantesData, setInquilinoVisitantes)
+ * - useData (contexto: inquilinoVisitantesData, recargarVisitantesInquilino)
+ * - inquilinoService (cancelarVisitante → PATCH /inquilino/visitantes/:id)
  * - useToast (notificaciones)
+ * - useAlert (modal de confirmación "Cancelar visita")
  * - useLocalDate (formato de hora)
  *
+ * NOTA (cambio): igual que pasó en MisReservasPage.tsx, cancelarVisitante
+ * solo hacía setInquilinoVisitantes(prev => ...) — mutaba el estado local
+ * en memoria y nunca llamaba al backend, así que "cancelaba" visualmente
+ * pero no se persistía en la BD (al recargar la página volvía a aparecer
+ * pendiente). Ahora llama a inquilinoService.cancelarVisitante(id) (PATCH
+ * /api/inquilino/visitantes/:id, que ejecuta sp_CancelarVisitante) y, si el
+ * backend confirma, recarga la lista real con recargarVisitantesInquilino().
+ * El modal de confirmación (useAlert().confirmar) se mantiene igual.
+ *
+ * También se agregó 'Cancelado' además de 'Cancelada' al chequear el badge
+ * de estado: en Inquilinoreservacontroller.ts vimos que el backend guarda
+ * el estado cancelado en masculino ('Cancelado') aunque el mock/UI usaba
+ * 'Cancelada' — por consistencia se contempla el mismo caso aquí para que
+ * el badge no caiga en el 'badge-error' genérico si sp_CancelarVisitante
+ * hace lo mismo.
  * ============================================================================
  */
 
+import { useState } from 'react';
 import { useData } from '../../context/DataContext';
 import { useToast } from '../../components/Toast';
 import { useAlert } from '../../components/Alert';
 import { formatHoraAMPM } from '../../hooks/useLocalDate';
+import { inquilinoService } from '../../services/inquilinoService';
 
 export default function MisVisitantesPage() {
-  const { inquilinoVisitantesData, setInquilinoVisitantes, addNotification } = useData();
+  const { inquilinoVisitantesData, recargarVisitantesInquilino, addNotification } = useData();
   const { showToast } = useToast();
   const { confirmar } = useAlert();
+  const [cancelandoId, setCancelandoId] = useState<number | null>(null);
 
   const verDetalleVisitante = (id: number) => {
     const visitante = inquilinoVisitantesData.find(v => v.id === id);
@@ -43,7 +63,7 @@ export default function MisVisitantesPage() {
       estadoLine = `<div style="margin-top:var(--space-3);padding-top:var(--space-2);border-top:1px solid var(--border-color);color:var(--warning);font-size:0.8rem;">⏳ Pendiente de autorización por el guardia.</div>`;
     } else if (visitante.estado === 'Rechazado') {
       estadoLine = `<div style="margin-top:var(--space-3);padding-top:var(--space-2);border-top:1px solid var(--border-color);color:var(--error);font-size:0.8rem;">❌ Visita rechazada.</div>`;
-    } else if (visitante.estado === 'Cancelada') {
+    } else if (visitante.estado === 'Cancelada' || visitante.estado === 'Cancelado') {
       estadoLine = `<div style="margin-top:var(--space-3);padding-top:var(--space-2);border-top:1px solid var(--border-color);color:var(--text-muted);font-size:0.8rem;">🚫 Visita cancelada por el residente.</div>`;
     }
 
@@ -75,9 +95,20 @@ export default function MisVisitantesPage() {
       { titulo: 'Cancelar visita', confirmarTexto: 'Sí, cancelar' }
     );
     if (!confirmado) return;
-    setInquilinoVisitantes(prev => prev.map(v => v.id === id ? { ...v, estado: 'Cancelada' as const } : v));
-    showToast('Visita cancelada correctamente.', 'success');
-    addNotification('inquilino', 'Visita cancelada', `Cancelaste la visita de ${visitante.nombre}.`);
+
+    setCancelandoId(id);
+    try {
+      await inquilinoService.cancelarVisitante(id);
+      await recargarVisitantesInquilino();
+
+      showToast('Visita cancelada correctamente.', 'success');
+      addNotification('inquilino', 'Visita cancelada', `Cancelaste la visita de ${visitante.nombre}.`);
+    } catch (error: unknown) {
+      const err = error as Error;
+      showToast(err.message || 'No se pudo cancelar la visita.', 'error');
+    } finally {
+      setCancelandoId(null);
+    }
   };
 
   return (
@@ -93,7 +124,7 @@ export default function MisVisitantesPage() {
               <tr><td colSpan={5} style={{ textAlign: 'center', padding: 'var(--space-4)', color: 'var(--text-muted)' }}>No tienes visitantes registrados.</td></tr>
             ) : (
               inquilinoVisitantesData.map(v => {
-                const estadoBadge = v.estado === 'Pendiente' ? 'badge-warning' : v.estado === 'Autorizado' ? 'badge-success' : v.estado === 'Cancelada' ? 'badge' : 'badge-error';
+                const estadoBadge = v.estado === 'Pendiente' ? 'badge-warning' : v.estado === 'Autorizado' ? 'badge-success' : (v.estado === 'Cancelada' || v.estado === 'Cancelado') ? 'badge' : 'badge-error';
                 return (
                   <tr key={v.id}>
                     <td data-label="Visitante">{v.nombre}</td>
@@ -104,7 +135,9 @@ export default function MisVisitantesPage() {
                       <div className="action-cell">
                         <button className="btn-sm btn-info" onClick={() => verDetalleVisitante(v.id)}><i className="fas fa-eye"></i> Ver</button>
                         {v.estado === 'Pendiente' && (
-                          <button className="btn-sm btn-danger-sm" onClick={() => cancelarVisitante(v.id)}><i className="fas fa-times"></i> Cancelar</button>
+                          <button className="btn-sm btn-danger-sm" onClick={() => cancelarVisitante(v.id)} disabled={cancelandoId === v.id}>
+                            <i className="fas fa-times"></i> {cancelandoId === v.id ? 'Cancelando...' : 'Cancelar'}
+                          </button>
                         )}
                       </div>
                     </td>

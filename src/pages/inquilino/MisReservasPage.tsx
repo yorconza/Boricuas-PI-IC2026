@@ -8,28 +8,58 @@
  * de cada reserva y cancelarla (con o sin reembolso según la anticipación).
  *
  * Componentes que utiliza
- * - useData (contexto: inquilinoReservasData, setInquilinoReservas)
+ * - useData (contexto: inquilinoReservasData, recargarReservasInquilino)
+ * - inquilinoService (cancelarReserva → PATCH /inquilino/reservas/:id)
  * - useToast (notificaciones)
+ * - useAlert (modal de confirmación — mismo componente que usa
+ *   MisVisitantesPage.tsx para "Cancelar visita")
  * - useLocalDate (formato de hora)
  *
  * Flujo
  * 1. Inquilino ve lista de sus reservas ordenadas por fecha
  * 2. Puede ver detalle en un modal
- * 3. Puede cancelar: si faltan más de X horas → reembolso, si no → sin reembolso
+ * 3. Puede cancelar: confirma con el modal de useAlert, luego se persiste
+ *    en la BD. El mensaje de reembolso (según anticipación) es informativo
+ *    en el frontend; sp_CancelarReserva es quien decide el estado real de
+ *    pago en la BD.
  *
+ * NOTA (cambio): antes cancelarReserva solo hacía setInquilinoReservas(prev =>
+ * ...) — mutaba el estado local en memoria y nunca llamaba al backend, y
+ * cancelaba sin ninguna confirmación. Ahora:
+ * 1. Usa el mismo modal de confirmación (useAlert().confirmar) que ya
+ *    tienes en MisVisitantesPage.tsx, en vez de un modal casero.
+ * 2. Llama a inquilinoService.cancelarReserva(id) (PATCH
+ *    /api/inquilino/reservas/:id, que ejecuta sp_CancelarReserva) y, si el
+ *    backend confirma, recarga la lista real con recargarReservasInquilino().
+ * 3. El backend devuelve el estado cancelado como 'Cancelado' (no
+ *    'Cancelada' como el resto de la UI/mock) — se filtra ambos para que el
+ *    botón "Cancelar" desaparezca igual que en las demás filas ya canceladas.
+ *
+ * NOTA (cambio - filtro de fecha): la tabla ahora solo muestra reservas de
+ * hoy en adelante (filter con `hoy`), ordenadas ascendente (la más próxima
+ * primero). Las reservas pasadas ya no aparecen en esta vista.
  * ============================================================================
  */
 
+import { useState } from 'react';
 import { useData } from '../../context/DataContext';
 import { useToast } from '../../components/Toast';
+import { useAlert } from '../../components/Alert';
 import { formatHoraAMPM } from '../../hooks/useLocalDate';
 import { formatearMoneda } from '../../utils/formatters';
+import { inquilinoService } from '../../services/inquilinoService';
 
 export default function MisReservasPage() {
-  const { inquilinoReservasData, setInquilinoReservas, addNotification } = useData();
+  const { inquilinoReservasData, recargarReservasInquilino, addNotification } = useData();
   const { showToast } = useToast();
+  const { confirmar } = useAlert();
+  const [cancelandoId, setCancelandoId] = useState<number | null>(null);
   const hoy = new Date();
   hoy.setHours(0, 0, 0, 0);
+
+  const reservasVisibles = [...inquilinoReservasData]
+    .filter(r => new Date(r.fecha) >= hoy)
+    .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
 
   const verDetalleReserva = (id: number) => {
     const reserva = inquilinoReservasData.find(r => r.id === id);
@@ -40,7 +70,7 @@ export default function MisReservasPage() {
     if (!modal || !body || !titulo) return;
 
     titulo.textContent = 'Detalle de reserva';
-    const estadoBadge = reserva.estado === 'Confirmada' ? 'badge-success' : reserva.estado === 'Pendiente' ? 'badge-warning' : reserva.estado === 'Cancelada' ? 'badge-error' : 'badge-info';
+    const estadoBadge = reserva.estado === 'Confirmada' ? 'badge-success' : reserva.estado === 'Pendiente' ? 'badge-warning' : (reserva.estado === 'Cancelada' || reserva.estado === 'Cancelado') ? 'badge-error' : 'badge-info';
     const pagoBadge = reserva.pago_estado === 'Pagado' ? 'badge-success' : reserva.pago_estado === 'Reembolsado' ? 'badge-info' : reserva.pago_estado === 'SinReembolso' ? 'badge-warning' : 'badge-warning';
     body.innerHTML = `
       <div class="detail-row"><span class="detail-label">Área</span><span class="detail-value">${reserva.area}</span></div>
@@ -58,10 +88,10 @@ export default function MisReservasPage() {
     document.getElementById('detalleReservaModal')?.classList.remove('open');
   };
 
-  const cancelarReserva = (id: number) => {
+  const cancelarReserva = async (id: number) => {
     const reserva = inquilinoReservasData.find(r => r.id === id);
     if (!reserva) return;
-    if (reserva.estado === 'Cancelada') {
+    if (reserva.estado === 'Cancelada' || reserva.estado === 'Cancelado') {
       showToast('Esta reserva ya está cancelada.', 'error');
       return;
     }
@@ -71,19 +101,31 @@ export default function MisReservasPage() {
       showToast('No se puede cancelar una reserva que ya inició o ya finalizó.', 'error');
       return;
     }
+
+    const confirmado = await confirmar(
+      `¿Cancelar tu reserva de ${reserva.area} del ${reserva.fecha}?`,
+      { titulo: 'Cancelar reserva', confirmarTexto: 'Sí, cancelar' }
+    );
+    if (!confirmado) return;
+
     const diffHoras = (fechaReserva.getTime() - ahora.getTime()) / (1000 * 60 * 60);
     const horasAnticipacion = reserva.horas_anticipacion_cancelacion || 1;
     const tieneReembolso = diffHoras >= horasAnticipacion;
 
-    setInquilinoReservas(prev => prev.map(r =>
-      r.id === id
-        ? { ...r, estado: 'Cancelada' as const, pago_estado: tieneReembolso ? 'Reembolsado' as const : 'SinReembolso' as const }
-        : r
-    ));
+    setCancelandoId(id);
+    try {
+      await inquilinoService.cancelarReserva(id);
+      await recargarReservasInquilino();
 
-    const mensaje = tieneReembolso ? 'El monto será reembolsado completamente.' : 'No aplica reembolso por cancelación con poca anticipación.';
-    addNotification('inquilino', 'Reserva cancelada', `Cancelaste la reserva de ${reserva.area}. ${mensaje}`);
-    showToast(`Reserva de ${reserva.area} cancelada. ${mensaje}`, tieneReembolso ? 'success' : 'error');
+      const mensaje = tieneReembolso ? 'El monto será reembolsado completamente.' : 'No aplica reembolso por cancelación con poca anticipación.';
+      addNotification('inquilino', 'Reserva cancelada', `Cancelaste la reserva de ${reserva.area}. ${mensaje}`);
+      showToast(`Reserva de ${reserva.area} cancelada. ${mensaje}`, tieneReembolso ? 'success' : 'error');
+    } catch (error: unknown) {
+      const err = error as Error;
+      showToast(err.message || 'No se pudo cancelar la reserva.', 'error');
+    } finally {
+      setCancelandoId(null);
+    }
   };
 
   return (
@@ -95,10 +137,10 @@ export default function MisReservasPage() {
             <tr><th>Área</th><th>Fecha</th><th>Horario</th><th>Personas</th><th>Estado</th><th>Pago</th><th>Acciones</th></tr>
           </thead>
           <tbody id="misReservasBody">
-            {inquilinoReservasData.length === 0 ? (
+            {reservasVisibles.length === 0 ? (
               <tr><td colSpan={7} style={{ textAlign: 'center', padding: 'var(--space-4)', color: 'var(--text-muted)' }}>No tienes reservas registradas.</td></tr>
             ) : (
-              [...inquilinoReservasData].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()).map(r => {
+              reservasVisibles.map(r => {
                 const estadoBadge = r.estado === 'Confirmada' ? 'badge-success' : r.estado === 'Pendiente' ? 'badge-warning' : r.estado === 'Reservado' ? 'badge-info' : 'badge-error';
                 const pagoBadge = r.pago_estado === 'Pagado' ? 'badge-success' : r.pago_estado === 'Reembolsado' ? 'badge-info' : r.pago_estado === 'SinReembolso' ? 'badge-warning' : 'badge-warning';
                 return (
@@ -112,8 +154,10 @@ export default function MisReservasPage() {
                     <td data-label="Acciones">
                       <div className="action-cell">
                         <button className="btn-sm btn-info" onClick={() => verDetalleReserva(r.id)}><i className="fas fa-eye"></i> Ver</button>
-                        {r.estado !== 'Cancelada' && new Date(r.fecha) >= hoy && (
-                          <button className="btn-sm btn-danger-sm" onClick={() => cancelarReserva(r.id)}><i className="fas fa-times"></i> Cancelar</button>
+                        {r.estado !== 'Cancelada' && r.estado !== 'Cancelado' && new Date(r.fecha) >= hoy && (
+                          <button className="btn-sm btn-danger-sm" onClick={() => cancelarReserva(r.id)} disabled={cancelandoId === r.id}>
+                            <i className="fas fa-times"></i> {cancelandoId === r.id ? 'Cancelando...' : 'Cancelar'}
+                          </button>
                         )}
                       </div>
                     </td>

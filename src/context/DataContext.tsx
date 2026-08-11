@@ -26,6 +26,8 @@ import {
 } from '../data/sampleData';
 import { useAuth } from '../hooks/useAuth';
 import { api } from '../services/apiClient';
+import { inquilinoService, type AreaInquilinoRaw } from '../services/inquilinoService';
+import { toDateOnly, toTimeOnly } from '../hooks/useLocalDate';
 
 interface PersonalRaw {
   id_usuario: number;
@@ -87,6 +89,8 @@ interface ReservaRaw {
   estado?: string;
   cantidad_personas?: number;
   personas?: number;
+  costo?: number;
+  estado_pago?: string;
 }
 
 export interface CrearReservaDTO {
@@ -140,10 +144,13 @@ interface DataContextType {
   reservasData: Reserva[];
   visitas: Visitante[];
   areasDisponiblesData: AreaInquilino[];
+  recargarAreasDisponibles: () => Promise<void>;
   inquilinoReservasData: Reserva[];
   setInquilinoReservas: React.Dispatch<React.SetStateAction<Reserva[]>>;
+  recargarReservasInquilino: () => Promise<void>;
   inquilinoVisitantesData: Visitante[];
   setInquilinoVisitantes: React.Dispatch<React.SetStateAction<Visitante[]>>;
+  recargarVisitantesInquilino: () => Promise<void>;
   activityLog: ActivityItem[];
   alertas: AlertaItem[];
   adminNotifications: NotificationItem[];
@@ -201,25 +208,107 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [pagosData] = useState<Pago[]>(initialPagosData);
   const [adminReservas, setReservasData] = useState<Reserva[]>([]);
   const [visitas] = useState<Visitante[]>(visitasData);
-  const [areasDisponiblesData] = useState<AreaInquilino[]>(areasDisponibles);
+  const [areasDisponiblesData, setAreasDisponibles] = useState<AreaInquilino[]>(areasDisponibles);
   const [inquilinoReservasData, setInquilinoReservas] = useState<Reserva[]>(inquilinoReservas);
   const [inquilinoVisitantesData, setInquilinoVisitantes] = useState<Visitante[]>(inquilinoVisitantes);
-
-  // Dashboard state
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
-
   const [activityLog, setActivityLog] = useState<ActivityItem[]>(getInitialActivityLog);
   const [alertas, setAlertas] = useState<AlertaItem[]>(getInitialAlertas);
   const [adminNotifications, setAdminNotifications] = useState<NotificationItem[]>(getInitialAdminNotifications);
   const [guardiaNotifications, setGuardiaNotifications] = useState<NotificationItem[]>(getInitialGuardiaNotifications);
   const [inquilinoNotifications, setInquilinoNotifications] = useState<NotificationItem[]>(getInitialInquilinoNotifications);
-
   const { usuario, verificacion2FA } = useAuth();
   const idAdminActual = usuario?.idUsuario;
+
+  // --- Reservas / Visitantes del Inquilino (rol Inquilino) ---
+  const recargarReservasInquilino = useCallback(async () => {
+    if (!usuario || usuario.rol !== 'Inquilino') return;
+
+    try {
+      const data = await inquilinoService.obtenerMisReservas();
+
+      if (!Array.isArray(data)) {
+        console.error('Error del backend al obtener reservas del inquilino:', data);
+        return;
+      }
+
+      const transformed: Reserva[] = data.map((r) => ({
+        id: r.id_reserva,
+        area: r.area,
+        fecha: toDateOnly(r.fecha),
+        hora_inicio: toTimeOnly(r.hora_inicio),
+        hora_fin: toTimeOnly(r.hora_fin),
+        estado: r.estado as Reserva['estado'],
+        personas: r.cantidad_personas,
+        costo: r.costo,
+        pago_estado: r.estado_pago,
+      }));
+
+      setInquilinoReservas(transformed);
+    } catch (err) {
+      console.error('Error de red al recargar reservas del inquilino:', err);
+    }
+  }, [usuario]);
+
+  const recargarVisitantesInquilino = useCallback(async () => {
+    if (!usuario || usuario.rol !== 'Inquilino') return;
+
+    try {
+      const data = await inquilinoService.obtenerVisitantes();
+
+      if (!Array.isArray(data)) {
+        console.error('Error del backend al obtener visitantes del inquilino:', data);
+        return;
+      }
+
+      const transformed: Visitante[] = data.map((v) => ({
+        id: v.id_visitante,
+        nombre: v.nombre_completo,
+        documento: v.documento_identidad,
+        placa: v.placa ?? '',
+        hora_esperada: v.hora_esperada ? toTimeOnly(v.hora_esperada) : '',
+        estado: v.estado,
+        motivo_rechazo: v.motivo_rechazo ?? undefined,
+      }));
+
+      setInquilinoVisitantes(transformed);
+    } catch (err) {
+      console.error('Error de red al recargar visitantes del inquilino:', err);
+    }
+  }, [usuario]);
+
+  const recargarAreasDisponibles = useCallback(async () => {
+    if (!usuario || usuario.rol !== 'Inquilino') return;
+
+    try {
+      const data = await inquilinoService.obtenerAreasDisponibles();
+
+      if (!Array.isArray(data)) {
+        console.error('Error del backend al obtener áreas disponibles:', data);
+        return;
+      }
+
+      const transformed: AreaInquilino[] = data.map((a: AreaInquilinoRaw) => ({
+        id: a.id_area,
+        nombre: a.nombre,
+        imagen: a.foto_principal || '/img/area-placeholder.jpg',
+        capacidad: a.capacidad_max,
+        horario_inicio: new Date(a.hora_apertura).getUTCHours(),
+        horario_fin: new Date(a.hora_cierre).getUTCHours(),
+        costo_por_hora: a.costo_por_hora,
+        disponible: a.estado === 'Disponible',
+      }));
+
+      setAreasDisponibles(transformed);
+    } catch (err) {
+      console.error('Error de red al recargar áreas disponibles:', err);
+    }
+  }, [usuario]);
 
   // --- Dashboard Consulta ---
   const recargarDashboard = useCallback(async () => {
     if (!idAdminActual) return;
+
     try {
       const res = await api.get<DashboardApiResponse>('/dashboard');
 
@@ -475,8 +564,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
           residente: row.residente || row.nombre_residente || row.nombre_completo || 'Sin asignar',
           fecha: fechaFormateada,
           hora: horarioFormateado,
+          hora_inicio: hInicio,
+          hora_fin: hFin,
           estado: row.estado || 'Confirmada',
-          personas: row.cantidad_personas ?? row.personas ?? 1
+          personas: row.cantidad_personas ?? row.personas ?? 1,
+          costo: row.costo ?? 0,
+          pago_estado: row.estado_pago ?? 'Pendiente'
         };
       });
 
@@ -512,12 +605,31 @@ export function DataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!usuario || !verificacion2FA) return;
 
-    recargarPersonal();
-    recargarResidentes();
-    recargarContratos();
-    recargarReservas();
-    recargarDashboard();
-  }, [usuario, verificacion2FA, recargarPersonal, recargarResidentes, recargarContratos, recargarReservas, recargarDashboard]);
+    // La carga inicial de datos al montar el provider es intencional: los
+    // recargar* solo actualizan el estado en continuaciones asíncronas
+    // (después del await de la API), nunca de forma síncrona en el efecto.
+    // La regla react-hooks/set-state-in-effect es conservadora y la marca.
+    /* eslint-disable react-hooks/set-state-in-effect */
+    // NOTA (cambio - fix 403 + reservas/visitantes vacías):
+    // Antes se llamaban SIEMPRE las 5 rutas de admin sin importar el rol
+    // autenticado. authorizeRole('Administrador') las rechazaba con 403 para
+    // Guarda/Inquilino, y las reservas/visitantes del inquilino nunca se
+    // cargaban desde el backend (quedaban en el mock de sampleData.ts).
+    if (usuario.rol === 'Administrador') {
+      recargarPersonal();
+      recargarResidentes();
+      recargarContratos();
+      recargarDepartamentos();
+      recargarReservas();
+      recargarDashboard();
+    } else if (usuario.rol === 'Inquilino') {
+      recargarReservasInquilino();
+      recargarVisitantesInquilino();
+      recargarAreasDisponibles();
+    }
+    // Guarda no necesita ninguna de estas listas por ahora.
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [usuario, verificacion2FA, recargarPersonal, recargarResidentes, recargarContratos, recargarDepartamentos, recargarReservas, recargarDashboard, recargarReservasInquilino, recargarVisitantesInquilino, recargarAreasDisponibles]);
 
   // --- Helpers Notificaciones / Actividad ---
   const addActivity = useCallback((descripcion: string, icono = 'fa-circle', color = 'var(--accent)') => {
@@ -575,9 +687,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       pagosData,
       reservasData: adminReservas,
       visitas,
-      areasDisponiblesData,
-      inquilinoReservasData, setInquilinoReservas,
-      inquilinoVisitantesData, setInquilinoVisitantes,
+      areasDisponiblesData, recargarAreasDisponibles,
+      inquilinoReservasData, setInquilinoReservas, recargarReservasInquilino,
+      inquilinoVisitantesData, setInquilinoVisitantes, recargarVisitantesInquilino,
       activityLog, alertas,
       adminNotifications, guardiaNotifications, inquilinoNotifications,
       dashboardData, recargarDashboard,

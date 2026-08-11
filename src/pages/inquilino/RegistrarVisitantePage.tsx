@@ -22,39 +22,49 @@ import { useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/PageHeader';
 import { useData } from '../../context/DataContext';
 import { useToast } from '../../components/Toast';
+import { inquilinoService } from '../../services/inquilinoService';
 
 export default function RegistrarVisitantePage() {
   const navigate = useNavigate();
-  const { inquilinoVisitantesData, setInquilinoVisitantes, addNotification } = useData();
+  const { recargarVisitantesInquilino, addNotification } = useData();
   const { showToast } = useToast();
   const [nombre, setNombre] = useState('');
   const [documento, setDocumento] = useState('');
   const [placa, setPlaca] = useState('');
   const [horaEsperada, setHoraEsperada] = useState('');
+  const [enviando, setEnviando] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nombre || !documento) {
       showToast('Nombre y documento son obligatorios.', 'error');
       return;
     }
-    const newId = inquilinoVisitantesData.length ? Math.max(...inquilinoVisitantesData.map(v => v.id)) + 1 : 1;
-    const nuevoVisitante = {
-      id: newId,
-      nombre,
-      documento,
-      placa: placa || '',
-      hora_esperada: horaEsperada || '--:--',
-      estado: 'Pendiente' as const
-    };
-    setInquilinoVisitantes(prev => [...prev, nuevoVisitante]);
-    showToast(`Visitante ${nombre} registrado exitosamente.`, 'success');
-    addNotification('inquilino', 'Nuevo visitante', `Has registrado a ${nombre} como visitante.`);
-    setNombre('');
-    setDocumento('');
-    setPlaca('');
-    setHoraEsperada('');
-    navigate('/inquilino#mis-visitantes');
+
+    setEnviando(true);
+    try {
+      await inquilinoService.registrarVisitante({
+        nombre_completo: nombre,
+        documento_identidad: documento,
+        placa: placa || undefined,
+        hora_esperada: horaEsperada || ''
+      });
+
+      await recargarVisitantesInquilino();
+
+      showToast(`Visitante ${nombre} registrado exitosamente.`, 'success');
+      addNotification('inquilino', 'Nuevo visitante', `Has registrado a ${nombre} como visitante.`);
+      setNombre('');
+      setDocumento('');
+      setPlaca('');
+      setHoraEsperada('');
+      navigate('/inquilino#mis-visitantes');
+    } catch (err) {
+      console.error('Error al registrar visitante:', err);
+      showToast('No se pudo registrar el visitante. Intenta de nuevo.', 'error');
+    } finally {
+      setEnviando(false);
+    }
   };
 
   return (
@@ -78,7 +88,9 @@ export default function RegistrarVisitantePage() {
             <label htmlFor="visitanteHoraEsperada">Hora esperada</label>
             <input type="time" id="visitanteHoraEsperada" value={horaEsperada} onChange={e => setHoraEsperada(e.target.value)} />
           </div>
-          <button type="submit" className="btn-primary" style={{ width: '100%', justifyContent: 'center', marginTop: 'var(--space-2)' }}>Registrar visitante</button>
+          <button type="submit" className="btn-primary" disabled={enviando} style={{ width: '100%', justifyContent: 'center', marginTop: 'var(--space-2)' }}>
+            {enviando ? 'Registrando...' : 'Registrar visitante'}
+          </button>
         </form>
       </div>
     </>

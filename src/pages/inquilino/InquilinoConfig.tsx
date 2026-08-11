@@ -9,36 +9,24 @@
  *
  * Componentes que utiliza
  * - PageHeader (título)
- * - useTheme (contexto de tema)
+ * - usePreferencias (contexto de tema/idioma/fuente/tamaño de letra)
  *
+ * NOTA (cambio - migración a backend real): antes tema venía de un
+ * ThemeContext aparte (theme/setTheme) y fuente/tamaño se guardaban en
+ * localStorage del navegador (por eso persistían por dispositivo, no por
+ * cuenta, y además fuente/tamaño no se reaplicaban al recargar). Ahora los
+ * 4 selects usan PreferenciasContext, que carga/guarda contra
+ * GET/PATCH /api/preferencias (sp_ObtenerPreferencias / sp_ActualizarPreferencias),
+ * así que las preferencias quedan ligadas a la cuenta del usuario.
+ * El idioma queda conectado por primera vez (antes el select no hacía nada).
  * ============================================================================
  */
 
-import { useState } from 'react';
-import { useTheme } from '../../context/ThemeContext';
+import { usePreferencias } from '../../context/PreferenciasContext';
 import PageHeader from '../../components/PageHeader';
 
 export default function InquilinoConfig() {
-  const { theme, setTheme } = useTheme();
-  const [font, setFontState] = useState(() => localStorage.getItem('inquilino-font') || 'Inter');
-  const [fontSize, setFontSizeState] = useState(() => localStorage.getItem('inquilino-fontSize') || 'medium');
-
-  const handleFontChange = (value: string) => {
-    setFontState(value);
-    localStorage.setItem('inquilino-font', value);
-    document.body.style.fontFamily = value === 'Inter' ? "'Inter', sans-serif" :
-      value === 'SF Pro' ? "'SF Pro Display', -apple-system, sans-serif" :
-      "system-ui, -apple-system, sans-serif";
-  };
-
-  const handleFontSizeChange = (value: string) => {
-    setFontSizeState(value);
-    localStorage.setItem('inquilino-fontSize', value);
-    let baseSize = '16px';
-    if (value === 'small') baseSize = '14px';
-    else if (value === 'large') baseSize = '18px';
-    document.documentElement.style.fontSize = baseSize;
-  };
+  const { tema, idioma, fuente, tamanoFuente, setTema, setIdioma, setFuente, setTamanoFuente } = usePreferencias();
 
   return (
     <>
@@ -49,7 +37,7 @@ export default function InquilinoConfig() {
           <div className="setting-item">
             <span className="setting-label">Idioma</span>
             <div className="setting-control">
-              <select id="langSelect">
+              <select id="langSelect" value={idioma} onChange={e => setIdioma(e.target.value as 'es' | 'en')}>
                 <option value="es">Español</option>
                 <option value="en">English</option>
               </select>
@@ -61,7 +49,7 @@ export default function InquilinoConfig() {
           <div className="setting-item">
             <span className="setting-label">Tema</span>
             <div className="setting-control">
-              <select id="themeSelect" value={theme} onChange={e => setTheme(e.target.value as 'dark' | 'light' | 'system')}>
+              <select id="themeSelect" value={tema} onChange={e => setTema(e.target.value as 'dark' | 'light' | 'system')}>
                 <option value="dark">Oscuro</option>
                 <option value="light">Claro</option>
                 <option value="system">Sistema</option>
@@ -71,7 +59,7 @@ export default function InquilinoConfig() {
           <div className="setting-item">
             <span className="setting-label">Fuente</span>
             <div className="setting-control">
-              <select id="fontSelect" value={font} onChange={e => handleFontChange(e.target.value)}>
+              <select id="fontSelect" value={fuente} onChange={e => setFuente(e.target.value as 'Inter' | 'SF Pro' | 'System')}>
                 <option value="Inter">Inter</option>
                 <option value="SF Pro">SF Pro</option>
                 <option value="System">System</option>
@@ -81,7 +69,7 @@ export default function InquilinoConfig() {
           <div className="setting-item">
             <span className="setting-label">Tamaño de texto</span>
             <div className="setting-control">
-              <select id="fontSizeSelect" value={fontSize} onChange={e => handleFontSizeChange(e.target.value)}>
+              <select id="fontSizeSelect" value={tamanoFuente} onChange={e => setTamanoFuente(e.target.value as 'small' | 'medium' | 'large')}>
                 <option value="small">Pequeño</option>
                 <option value="medium">Mediano</option>
                 <option value="large">Grande</option>

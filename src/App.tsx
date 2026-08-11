@@ -46,8 +46,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { AuthProvider } from './context/AuthContext';
-import { ThemeProvider } from './context/ThemeContext';
+
 import { DataProvider } from './context/DataContext';
+import { PreferenciasProvider } from './context/PreferenciasContext';
 import { ToastProvider } from './components/Toast';
 import { AlertProvider } from './components/Alert';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -86,34 +87,34 @@ import InquilinoConfig from './pages/inquilino/InquilinoConfig';
 export default function App() {
   return (
     <BrowserRouter>
-      <ThemeProvider>
-        <AuthProvider>
-          <DataProvider>
+      <AuthProvider>
+        <DataProvider>
+          <PreferenciasProvider>
             <ToastProvider>
               <AlertProvider>
                 <ErrorBoundary>
-                <Routes>
-                  <Route path="/login" element={<LoginPage />} />
-                  <Route path="/forgot" element={<ForgotPasswordPage />} />
-                  <Route path="/recuperar" element={<RecuperarPasswordPage />} />
-                  <Route path="/2fa" element={<TwoFactorPage />} />
-                  <Route path="/admin/*" element={
-                    <PrivateRoute roles={['Administrador']}><AdminRouter /></PrivateRoute>
-                  } />
-                  <Route path="/guardia/*" element={
-                    <PrivateRoute roles={['Guarda']}><GuardiaRouter /></PrivateRoute>
-                  } />
-                  <Route path="/inquilino/*" element={
-                    <PrivateRoute roles={['Inquilino']}><InquilinoRouter /></PrivateRoute>
-                  } />
-                  <Route path="*" element={<Navigate to="/login" replace />} />
-                </Routes>
-              </ErrorBoundary>
+                  <Routes>
+                    <Route path="/login" element={<LoginPage />} />
+                    <Route path="/forgot" element={<ForgotPasswordPage />} />
+                    <Route path="/recuperar" element={<RecuperarPasswordPage />} />
+                    <Route path="/2fa" element={<TwoFactorPage />} />
+                    <Route path="/admin/*" element={
+                      <PrivateRoute roles={['Administrador']}><AdminRouter /></PrivateRoute>
+                    } />
+                    <Route path="/guardia/*" element={
+                      <PrivateRoute roles={['Guarda']}><GuardiaRouter /></PrivateRoute>
+                    } />
+                    <Route path="/inquilino/*" element={
+                      <PrivateRoute roles={['Inquilino']}><InquilinoRouter /></PrivateRoute>
+                    } />
+                    <Route path="*" element={<Navigate to="/login" replace />} />
+                  </Routes>
+                </ErrorBoundary>
               </AlertProvider>
             </ToastProvider>
-          </DataProvider>
-        </AuthProvider>
-      </ThemeProvider>
+          </PreferenciasProvider>
+        </DataProvider>
+      </AuthProvider>
     </BrowserRouter>
   );
 }
