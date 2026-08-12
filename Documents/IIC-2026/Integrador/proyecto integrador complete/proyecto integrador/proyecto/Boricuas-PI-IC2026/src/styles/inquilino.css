@@ -1,0 +1,251 @@
+/* ============================================================================
+   INQUILINO.CSS
+   Estilos EXCLUSIVOS del panel del Inquilino (Condominium · Inquilino).
+   Requiere cargar common.css antes que este archivo.
+   ============================================================================ */
+
+/* ============================================================
+   BOTONES PEQUEÑOS (usados en previews del dashboard y tablas)
+   ============================================================ */
+.btn-sm {
+    padding: var(--space-1) var(--space-2);
+    font-size: 0.7rem;
+    border-radius: var(--radius-sm);
+    border: none;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background var(--transition-fast), transform var(--transition-fast);
+}
+.btn-sm:hover {
+    transform: translateY(-2px);
+}
+.btn-sm.btn-info {
+    background: var(--accent);
+    color: #fff;
+}
+.btn-sm.btn-info:hover {
+    background: var(--accent-hover);
+}
+.btn-sm.btn-outline {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+}
+.btn-sm.btn-outline:hover {
+    background: var(--bg-card-hover);
+    color: var(--text-primary);
+    border-color: var(--accent);
+}
+.btn-sm.btn-danger-sm {
+    background: var(--error);
+    color: #fff;
+}
+.btn-sm.btn-danger-sm:hover {
+    background: #d94a52;
+    transform: translateY(-2px);
+}
+
+/* ============================================================
+   DASHBOARD PRINCIPAL (2 columnas: próxima reserva / próxima visita)
+   ============================================================ */
+.dashboard-grid-inquilino {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-4);
+    margin-bottom: var(--space-4);
+}
+
+.reservation-preview,
+.visit-preview {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--border-color);
+}
+.reservation-preview:last-child,
+.visit-preview:last-child {
+    border-bottom: none;
+}
+.reservation-preview .reservation-icon,
+.visit-preview .visit-icon {
+    font-size: 1.8rem;
+    width: 40px;
+    text-align: center;
+    color: var(--accent);
+}
+.reservation-preview .reservation-info,
+.visit-preview .visit-info {
+    flex: 1;
+}
+.reservation-preview .reservation-info .title,
+.visit-preview .visit-info .title {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.reservation-preview .reservation-info .subtitle,
+.visit-preview .visit-info .subtitle {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+.reservation-preview .reservation-actions,
+.visit-preview .visit-actions {
+    flex-shrink: 0;
+}
+.reservation-preview .reservation-actions .btn-sm,
+.visit-preview .visit-actions .btn-sm {
+    padding: var(--space-1) var(--space-2);
+    font-size: 0.7rem;
+    border-radius: var(--radius-sm);
+    border: none;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background var(--transition-fast), transform var(--transition-fast);
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+}
+.reservation-preview .reservation-actions .btn-sm:hover,
+.visit-preview .visit-actions .btn-sm:hover {
+    background: var(--bg-card-hover);
+    color: var(--text-primary);
+    border-color: var(--accent);
+    transform: translateY(-2px);
+}
+
+/* Accesos rápidos */
+.quick-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-3);
+    margin-top: var(--space-2);
+}
+.quick-action-btn {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+.quick-action-btn:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    color: var(--text-primary);
+}
+.quick-action-btn i {
+    font-size: 1.2rem;
+    color: var(--accent);
+    width: 24px;
+    text-align: center;
+}
+
+/* ============================================================
+   RESERVAR ÁREA (cards con imagen, distintas a las del Admin)
+   ============================================================ */
+.area-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--space-4);
+}
+.area-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    transition: transform var(--transition-smooth), border-color var(--transition-smooth), background var(--transition-smooth);
+    cursor: pointer;
+}
+.area-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--accent);
+}
+.area-card .area-img {
+    height: 160px;
+    background: var(--bg-secondary);
+    overflow: hidden;
+}
+.area-card .area-img img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform var(--transition-smooth);
+}
+.area-card:hover .area-img img {
+    transform: scale(1.05);
+}
+.area-card .area-body {
+    padding: var(--space-3);
+    text-align: center;
+}
+.area-card .area-body .area-name {
+    font-weight: 600;
+    font-size: 1.2rem;
+    color: var(--text-primary);
+    margin-bottom: var(--space-1);
+}
+.area-card .area-body .area-detail {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin: var(--space-1) 0;
+}
+.area-card .area-body .area-detail strong {
+    color: var(--text-primary);
+}
+.area-card .area-body .area-status {
+    margin: var(--space-2) 0;
+}
+.area-card .area-body .area-status .badge {
+    font-size: 0.7rem;
+}
+.area-card .area-body .btn-primary {
+    width: 100%;
+    justify-content: center;
+    margin-top: var(--space-2);
+}
+
+/* ============================================================
+   NUEVA RESERVA: costo estimado
+   ============================================================ */
+.costo-estimado {
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: var(--space-3);
+    text-align: center;
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    transition: background var(--transition-smooth), border-color var(--transition-smooth), color var(--transition-smooth);
+}
+.costo-estimado span {
+    color: var(--accent);
+}
+
+/* ============================================================
+   RESPONSIVE (exclusivo Inquilino)
+   ============================================================ */
+@media (max-width: 768px) {
+    .dashboard-grid-inquilino {
+        grid-template-columns: 1fr;
+    }
+    .quick-actions {
+        grid-template-columns: 1fr 1fr;
+    }
+    .area-cards-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 480px) {
+    .quick-actions {
+        grid-template-columns: 1fr;
+    }
+}
