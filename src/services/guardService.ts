@@ -3,10 +3,8 @@
  * Archivo: guardService.ts
  * ============================================================================
  * Servicio del panel de Guardia. Consume la API real del backend
- * (/api/guard) para reemplazar los datos simulados de sampleData.ts.
- *
- * El token JWT se adjunta automáticamente en cada petición (apiClient),
- * y el backend obtiene el id del guardia desde el token (req.user).
+ * (/api/guard). El token JWT se adjunta automáticamente en cada petición
+ * (apiClient), y el backend obtiene el id del guardia desde el token (req.user).
  *
  * Endpoints que consume:
  *   GET   /guard/dashboard/summary   → Resumen de tarjetas

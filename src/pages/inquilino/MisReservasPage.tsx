@@ -32,7 +32,7 @@
  *    /api/inquilino/reservas/:id, que ejecuta sp_CancelarReserva) y, si el
  *    backend confirma, recarga la lista real con recargarReservasInquilino().
  * 3. El backend devuelve el estado cancelado como 'Cancelado' (no
- *    'Cancelada' como el resto de la UI/mock) — se filtra ambos para que el
+ *    'Cancelada' como el resto de la UI) — se filtra ambos para que el
  *    botón "Cancelar" desaparezca igual que en las demás filas ya canceladas.
  *
  * NOTA (cambio - filtro de fecha): la tabla ahora solo muestra reservas de
@@ -45,7 +45,7 @@ import { useState } from 'react';
 import { useData } from '../../context/DataContext';
 import { useToast } from '../../components/Toast';
 import { useAlert } from '../../components/Alert';
-import { formatHoraAMPM } from '../../hooks/useLocalDate';
+import { formatHoraAMPM, getLocalDateString } from '../../hooks/useLocalDate';
 import { formatearMoneda } from '../../utils/formatters';
 import { inquilinoService } from '../../services/inquilinoService';
 
@@ -54,12 +54,30 @@ export default function MisReservasPage() {
   const { showToast } = useToast();
   const { confirmar } = useAlert();
   const [cancelandoId, setCancelandoId] = useState<number | null>(null);
-  const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
+
+  // Fecha actual local en "YYYY-MM-DD" (getLocalDateString). Comparar por
+  // string evita el bug de zona horaria: `new Date("YYYY-MM-DD")` se interpreta
+  // como medianoche UTC, que en zonas al oeste de UTC (ej. Costa Rica, UTC-6)
+  // cae en el DÍA ANTERIOR local y descartaba las reservas de HOY.
+  // (Mismo patrón que ReservasPage.tsx, pestaña Hoy/Historial.)
+  const hoyFechaStr = getLocalDateString();
 
   const reservasVisibles = [...inquilinoReservasData]
-    .filter(r => new Date(r.fecha) >= hoy)
-    .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
+    .filter(r => r.fecha >= hoyFechaStr)
+    .sort((a, b) => a.fecha.localeCompare(b.fecha));
+
+  // ¿El botón "Cancelar" debe mostrarse para esta reserva?
+  // - No si ya está cancelada o finalizada (SP auto-finaliza al pasar hora_fin).
+  // - No si la fecha ya pasó.
+  // - La hora de inicio NO se compara en el frontend: al llegar el inicio, el
+  //   backend marca la reserva como 'Finalizada' (auto-finalización lazy en
+  //   cada listado) y el botón desaparece. Si el usuario intenta cancelarla
+  //   justo en ese momento, el guard de cancelarReserva muestra el error.
+  const puedeCancelar = (r: (typeof inquilinoReservasData)[number]) =>
+    r.estado !== 'Cancelada' &&
+    r.estado !== 'Cancelado' &&
+    r.estado !== 'Finalizada' &&
+    r.fecha >= hoyFechaStr;
 
   const verDetalleReserva = (id: number) => {
     const reserva = inquilinoReservasData.find(r => r.id === id);
@@ -70,7 +88,7 @@ export default function MisReservasPage() {
     if (!modal || !body || !titulo) return;
 
     titulo.textContent = 'Detalle de reserva';
-    const estadoBadge = reserva.estado === 'Confirmada' ? 'badge-success' : reserva.estado === 'Pendiente' ? 'badge-warning' : (reserva.estado === 'Cancelada' || reserva.estado === 'Cancelado') ? 'badge-error' : 'badge-info';
+    const estadoBadge = reserva.estado === 'Confirmada' ? 'badge-success' : reserva.estado === 'Pendiente' ? 'badge-warning' : reserva.estado === 'Finalizada' ? 'badge-info' : (reserva.estado === 'Cancelada' || reserva.estado === 'Cancelado') ? 'badge-error' : 'badge-info';
     const pagoBadge = reserva.pago_estado === 'Pagado' ? 'badge-success' : reserva.pago_estado === 'Reembolsado' ? 'badge-info' : reserva.pago_estado === 'SinReembolso' ? 'badge-warning' : 'badge-warning';
     body.innerHTML = `
       <div class="detail-row"><span class="detail-label">Área</span><span class="detail-value">${reserva.area}</span></div>
@@ -98,7 +116,7 @@ export default function MisReservasPage() {
     const ahora = new Date();
     const fechaReserva = new Date(reserva.fecha + 'T' + reserva.hora_inicio);
     if (ahora >= fechaReserva) {
-      showToast('No se puede cancelar una reserva que ya inició o ya finalizó.', 'error');
+      showToast('No se puede cancelar una reserva que está en curso.', 'error');
       return;
     }
 
@@ -141,7 +159,7 @@ export default function MisReservasPage() {
               <tr><td colSpan={7} style={{ textAlign: 'center', padding: 'var(--space-4)', color: 'var(--text-muted)' }}>No tienes reservas registradas.</td></tr>
             ) : (
               reservasVisibles.map(r => {
-                const estadoBadge = r.estado === 'Confirmada' ? 'badge-success' : r.estado === 'Pendiente' ? 'badge-warning' : r.estado === 'Reservado' ? 'badge-info' : 'badge-error';
+                const estadoBadge = r.estado === 'Confirmada' ? 'badge-success' : r.estado === 'Pendiente' ? 'badge-warning' : (r.estado === 'Reservado' || r.estado === 'Finalizada') ? 'badge-info' : 'badge-error';
                 const pagoBadge = r.pago_estado === 'Pagado' ? 'badge-success' : r.pago_estado === 'Reembolsado' ? 'badge-info' : r.pago_estado === 'SinReembolso' ? 'badge-warning' : 'badge-warning';
                 return (
                   <tr key={r.id}>
@@ -154,7 +172,7 @@ export default function MisReservasPage() {
                     <td data-label="Acciones">
                       <div className="action-cell">
                         <button className="btn-sm btn-info" onClick={() => verDetalleReserva(r.id)}><i className="fas fa-eye"></i> Ver</button>
-                        {r.estado !== 'Cancelada' && r.estado !== 'Cancelado' && new Date(r.fecha) >= hoy && (
+                        {puedeCancelar(r) && (
                           <button className="btn-sm btn-danger-sm" onClick={() => cancelarReserva(r.id)} disabled={cancelandoId === r.id}>
                             <i className="fas fa-times"></i> {cancelandoId === r.id ? 'Cancelando...' : 'Cancelar'}
                           </button>

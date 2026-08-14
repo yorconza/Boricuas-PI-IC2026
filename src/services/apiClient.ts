@@ -23,6 +23,17 @@ export const API_URL: string = import.meta.env.VITE_API_URL ?? 'http://localhost
 // servidos por express.static, ej: http://localhost:4000/uploads/avatars/x.jpg)
 export const BASE_URL: string = API_URL.replace(/\/api\/?$/, '');
 
+/**
+ * Convierte la ruta de un archivo servido por express.static (/uploads/...) en
+ * una URL absoluta utilizable en <img>. Si ya empieza con http(s) se usa tal
+ * cual (URL externa). Compartido por avatares de perfil y áreas comunes.
+ */
+export const buildStaticUrl = (ruta: string | null | undefined): string => {
+  if (!ruta) return '';
+  if (/^https?:\/\//i.test(ruta)) return ruta;
+  return `${BASE_URL}${ruta}`;
+};
+
 // Claves de localStorage usadas por authService y AuthContext
 export const TOKEN_KEY = 'token';
 export const USUARIO_KEY = 'usuario';

@@ -204,7 +204,7 @@ export default function ContratosPage() {
               type="text" 
               value={cedula} 
               onChange={e => setCedula(formatearCedula(e.target.value))} 
-              placeholder="1-234-56789" 
+              placeholder="1-2345-6789" 
               maxLength={11} 
             />
           </div>

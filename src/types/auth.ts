@@ -17,14 +17,8 @@
  * - LoginPage.tsx (usa Credenciales y DatosRegistro para formularios)
  *
  * Datos actuales
- * Los datos son simulados (mock). No hay validación real de backend.
- *
- * Cambios para Backend
- * Cuando exista el backend, estas interfaces podrían ampliarse para
- * incluir campos como:
- * - ultimoAcceso: string
- * - fechaCreacion: string
- * - tokenExpiracion: number
+ * El usuario proviene del backend (POST /auth/login y /auth/register) vía
+ * authService; la sesión se persiste en localStorage (token JWT + usuario).
  *
  * ============================================================================
  */

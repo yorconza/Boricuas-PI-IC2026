@@ -146,7 +146,9 @@ export default function NuevaReservaPage({ preselectedAreaId }: NuevaReservaPage
 
     setEnviando(true);
     try {
-      await inquilinoService.crearReserva({
+      // El SP sp_CrearReservaPago calcula el monto en el servidor y lo
+      // devuelve como monto (monto_pagado); se muestra el monto confirmado.
+      const resp = await inquilinoService.crearReserva({
         id_area: area.id,
         fecha,
         hora_inicio: horaInicio,
@@ -157,7 +159,7 @@ export default function NuevaReservaPage({ preselectedAreaId }: NuevaReservaPage
 
       await recargarReservasInquilino();
       document.getElementById('confirmarPagoModal')?.classList.remove('open');
-      showToast(`Reserva de ${area.nombre} confirmada. Pago con ${metodoTexto} registrado.`, 'success');
+      showToast(`Reserva de ${area.nombre} confirmada. Pago de ${formatearMoneda(resp.monto)} con ${metodoTexto} registrado.`, 'success');
       addNotification('inquilino', 'Reserva confirmada', `Tu reserva de ${area.nombre} ha sido confirmada.`);
       setHoraInicio('');
       setHoraFin('');

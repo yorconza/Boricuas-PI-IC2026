@@ -69,9 +69,40 @@ export const createContrato = async (req: Request, res: Response) => {
         }
 
         const pool = await getConnection();
+
+        // FIX (cédula en distintos formatos): sp_Contrato_Insertar busca al
+        // usuario con igualdad EXACTA (WHERE cedula = @cedula), pero la cédula
+        // puede estar guardada con una agrupación de guiones distinta a la que
+        // produce la máscara del formulario. Ejemplo real: la BD guardó
+        // '2-343-54354' y el formulario envía '2-3435-4354' — mismos dígitos,
+        // guiones en otra posición → el match exacto fallaba con
+        // "No existe un usuario con esa cédula.".
+        // Solución: se resuelve aquí el id_usuario por DÍGITOS (sin guiones ni
+        // espacios) y se le pasa al SP la cédula EXACTA almacenada en la BD.
+        // Así el lookup exacto del SP siempre encuentra al inquilino.
+        const cedulaIngresada = String(cedula ?? '').trim();
+        const digitosCedula = cedulaIngresada.replace(/\D/g, '');
+        if (!digitosCedula) {
+            return res.status(400).json({ message: 'La cédula es obligatoria' });
+        }
+
+        const busqueda = await pool?.request()
+            .input('digitos_cedula', sql.VarChar(30), digitosCedula)
+            .query(`SELECT TOP 1 cedula
+                    FROM Usuario
+                    WHERE cedula IS NOT NULL
+                      AND REPLACE(REPLACE(LTRIM(RTRIM(cedula)), '-', ''), ' ', '') = @digitos_cedula
+                    ORDER BY id_usuario`);
+
+        const fila = busqueda?.recordset?.[0] as { cedula?: string } | undefined;
+        if (!fila?.cedula) {
+            return res.status(400).json({ message: 'No existe un usuario con esa cédula.' });
+        }
+        const cedulaEnBD = fila.cedula;
+
         const result = await pool?.request()
             .input('id_usuario_actual', sql.Int, idActual)
-            .input('cedula', sql.VarChar(30), cedula)
+            .input('cedula', sql.VarChar(30), cedulaEnBD)
             .input('numero_departamento', sql.VarChar(20), numero_departamento)
             .input('fecha_inicio', sql.Date, fecha_inicio)
             .input('fecha_fin', sql.Date, fecha_fin)

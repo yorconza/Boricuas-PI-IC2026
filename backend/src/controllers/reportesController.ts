@@ -45,8 +45,13 @@ export async function obtenerReportePagosPDF(
 ): Promise<void> {
     try {
         const { fecha_inicio, fecha_fin } = req.query;
-        const fechaFinAjustada = calcularFechaFinInclusiva(fecha_fin);
 
+        // NOTA (fechas del reporte de pagos): a diferencia de los reportes de
+        // visitas/reservas (cuyos SPs comparan DATETIME completos y necesitan
+        // el +1 día de calcularFechaFinInclusiva), sp_ReportePagos compara
+        // `CAST(fecha_pago AS DATE) <= @fecha_fin` (rango inclusivo por fecha),
+        // así que aquí NO se suma un día — si se sumara, el reporte incluiría
+        // un día de más (importante para el "reporte del día": hoy + mañana).
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader(
             'Content-Disposition',
@@ -57,7 +62,7 @@ export async function obtenerReportePagosPDF(
         const request = new sql.Request(pool);
 
         const paramInicio: string | null = fecha_inicio ? fecha_inicio : null;
-        const paramFin: string | null = fechaFinAjustada ? fechaFinAjustada : null;
+        const paramFin: string | null = fecha_fin ? fecha_fin : null;
 
         request.input('fecha_inicio', sql.Date, paramInicio);
         request.input('fecha_fin', sql.Date, paramFin);
@@ -90,13 +95,13 @@ export async function obtenerReportePagosJSON(
 ): Promise<void> {
     try {
         const { fecha_inicio, fecha_fin } = req.query;
-        const fechaFinAjustada = calcularFechaFinInclusiva(fecha_fin);
-
+        // Misma regla que el PDF: sp_ReportePagos compara por DATE, así que la
+        // fecha fin se envía tal cual (sin +1 día).
         const pool = await getConnection();
         const request = new sql.Request(pool);
 
         const paramInicio: string | null = fecha_inicio ? fecha_inicio : null;
-        const paramFin: string | null = fechaFinAjustada ? fechaFinAjustada : null;
+        const paramFin: string | null = fecha_fin ? fecha_fin : null;
 
         request.input('fecha_inicio', sql.Date, paramInicio);
         request.input('fecha_fin', sql.Date, paramFin);
@@ -133,8 +138,10 @@ export async function obtenerReporteVisitasPDF(
 ): Promise<void> {
     try {
         const { fecha_inicio, fecha_fin } = req.query;
-        const fechaFinAjustada = calcularFechaFinInclusiva(fecha_fin);
-
+        // NOTA (fechas): sp_ReporteVisitas compara `CAST(fecha_autorizacion AS
+        // DATE) <= @fecha_fin` (rango inclusivo por fecha), así que la fecha fin
+        // se envía tal cual — sin el +1 día de calcularFechaFinInclusiva (que
+        // solo aplica a los SPs que comparan DATETIME completos).
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader(
             'Content-Disposition',
@@ -145,7 +152,7 @@ export async function obtenerReporteVisitasPDF(
         const request = new sql.Request(pool);
 
         const paramInicio: string | null = fecha_inicio ? fecha_inicio : null;
-        const paramFin: string | null = fechaFinAjustada ? fechaFinAjustada : null;
+        const paramFin: string | null = fecha_fin ? fecha_fin : null;
 
         request.input('fecha_inicio', sql.Date, paramInicio);
         request.input('fecha_fin', sql.Date, paramFin);
@@ -178,13 +185,13 @@ export async function obtenerReporteVisitasJSON(
 ): Promise<void> {
     try {
         const { fecha_inicio, fecha_fin } = req.query;
-        const fechaFinAjustada = calcularFechaFinInclusiva(fecha_fin);
-
+        // Misma regla que el PDF: sp_ReporteVisitas compara por DATE, así que la
+        // fecha fin se envía tal cual (sin +1 día).
         const pool = await getConnection();
         const request = new sql.Request(pool);
 
         const paramInicio: string | null = fecha_inicio ? fecha_inicio : null;
-        const paramFin: string | null = fechaFinAjustada ? fechaFinAjustada : null;
+        const paramFin: string | null = fecha_fin ? fecha_fin : null;
 
         request.input('fecha_inicio', sql.Date, paramInicio);
         request.input('fecha_fin', sql.Date, paramFin);

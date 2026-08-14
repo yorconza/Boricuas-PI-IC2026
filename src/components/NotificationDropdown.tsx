@@ -23,7 +23,11 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useData } from '../context/DataContext';
+import { getTimeAgo } from '../hooks/useLocalDate';
 import type { UserRole } from '../types';
+
+/** Cada cuánto se recalcula el texto relativo ("hace 5 min"/"hace 2 h"). */
+const INTERVALO_REFRESCO_MS = 30_000;
 
 interface NotificationDropdownProps {
   role: UserRole;
@@ -32,9 +36,13 @@ interface NotificationDropdownProps {
 export default function NotificationDropdown({ role }: NotificationDropdownProps) {
   const {
     adminNotifications, guardiaNotifications,
-    inquilinoNotifications, markAsRead, markAllRead
+    inquilinoNotifications, markAsRead, markAllRead,
+    recargarNotificaciones
   } = useData();
   const [isOpen, setIsOpen] = useState(false);
+  // Fuerza un re-render periódico para que los tiempos relativos se actualicen
+  // mientras el dropdown está abierto ("hace 1 min" → "hace 2 min", etc.).
+  const [, setTick] = useState(0);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   const notifications = role === 'admin' ? adminNotifications
@@ -52,6 +60,21 @@ export default function NotificationDropdown({ role }: NotificationDropdownProps
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
+
+  // Refrescar los tiempos relativos cada 30 s mientras el dropdown está abierto.
+  useEffect(() => {
+    if (!isOpen) return;
+    const timer = setInterval(() => setTick(t => t + 1), INTERVALO_REFRESCO_MS);
+    return () => clearInterval(timer);
+  }, [isOpen]);
+
+  // Al abrir la campana se consulta la BD al instante (además del polling
+  // periódico del DataContext) para que una notificación recién creada por un
+  // trigger aparezca sin esperar al siguiente ciclo.
+  useEffect(() => {
+    if (!isOpen) return;
+    void recargarNotificaciones();
+  }, [isOpen, recargarNotificaciones]);
 
   return (
     <div className="notif-wrapper" ref={wrapperRef}>
@@ -85,7 +108,7 @@ export default function NotificationDropdown({ role }: NotificationDropdownProps
                 <div className="notif-content">
                   <div className="notif-header-row">
                     <span className="notif-title">{n.title}</span>
-                    <span className="notif-time">{n.time}</span>
+                    <span className="notif-time">{getTimeAgo(n.timestamp)}</span>
                   </div>
                   <div className="notif-msg">{n.message}</div>
                 </div>

@@ -8,9 +8,8 @@
  * pendientes, autorizadas hoy y rechazadas hoy. También lista las
  * próximas visitas pendientes.
  *
- * NOTA (cambio): Ya NO usa datos simulados. Los contadores y la lista de
- * próximas visitas se cargan desde la API real del backend
- * (guardService → /api/guard/dashboard/*), con el token JWT del guardia.
+ * Los contadores y la lista de próximas visitas se cargan desde la API del
+ * backend (guardService → /api/guard/dashboard/*), con el token JWT del guardia.
  *
  * ============================================================================
  */
@@ -18,15 +17,21 @@
 import { useEffect, useState, useCallback } from 'react';
 import { guardService, type ResumenVisitasHoy, type VisitaProxima } from '../../services/guardService';
 
+// Cada cuánto se recargan los KPIs y las próximas visitas desde la BD, para
+// que las nuevas solicitudes de visitantes aparezcan sin recargar la página.
+const INTERVALO_REFRESCO_GUARDIA_MS = 30_000;
+
 export default function GuardiaDashboard() {
   const [resumen, setResumen] = useState<ResumenVisitasHoy | null>(null);
   const [proximas, setProximas] = useState<VisitaProxima[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const cargarDatos = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const cargarDatos = useCallback(async (silencioso = false) => {
+    // silencioso=true (polling/foco): no activa el indicador de carga ni pisa
+    // el error, para que el panel no parpadee "Cargando…" cada 30 s.
+    if (!silencioso) setLoading(true);
+    if (!silencioso) setError(null);
     try {
       // Se ejecutan en paralelo: resumen de tarjetas + próximas visitas
       const [resumenData, proximasData] = await Promise.all([
@@ -37,9 +42,9 @@ export default function GuardiaDashboard() {
       setProximas(Array.isArray(proximasData) ? proximasData : []);
     } catch (err) {
       console.error('Error al cargar el dashboard del guardia:', err);
-      setError('No se pudieron cargar los datos. Verifica la conexión con el servidor.');
+      if (!silencioso) setError('No se pudieron cargar los datos. Verifica la conexión con el servidor.');
     } finally {
-      setLoading(false);
+      if (!silencioso) setLoading(false);
     }
   }, []);
 
@@ -54,22 +59,30 @@ export default function GuardiaDashboard() {
     cargarDatos();
   }, [cargarDatos]);
 
+  // Refresco automático: cada 30 s y al volver a enfocar la ventana, para
+  // ver las nuevas solicitudes de visitantes y las próximas visitas sin
+  // recargar. Los setState ocurren dentro de los callbacks diferidos
+  // (interval/focus), no de forma síncrona en el efecto.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      void cargarDatos(true);
+    }, INTERVALO_REFRESCO_GUARDIA_MS);
+    const onFocus = () => {
+      void cargarDatos(true);
+    };
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [cargarDatos]);
+
   const badgeClass = (estado: string) =>
     estado === 'Autorizado' ? 'badge-success' : estado === 'Rechazado' ? 'badge-error' : 'badge-warning';
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
-        <h2 style={{ marginBottom: 0 }}>Dashboard</h2>
-        <button
-          className="btn-secondary"
-          onClick={cargarDatos}
-          style={{ padding: 'var(--space-1) var(--space-3)', fontSize: '0.8rem' }}
-          title="Actualizar datos"
-        >
-          <i className="fas fa-sync-alt"></i> Actualizar
-        </button>
-      </div>
+      <h2 style={{ marginBottom: 'var(--space-4)' }}>Dashboard</h2>
 
       {error && (
         <div className="alert" style={{ background: 'rgba(255,82,82,.1)', border: '1px solid var(--error)', color: 'var(--error)', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)' }}>

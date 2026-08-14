@@ -87,7 +87,7 @@ interface LoginUserRow {
 /**
  * POST /api/auth/register
  * Registra un inquilino (público).
- * Body esperado: { nombreCompleto, correo, contrasena, telefono? }
+ * Body esperado: { nombreCompleto, correo, contrasena, cedula, telefono? }
  */
 export const register = async (req: Request, res: Response) => {
     try {
@@ -102,8 +102,10 @@ export const register = async (req: Request, res: Response) => {
 
         const nombre = (nombreCompleto ?? nombre_completo ?? '').trim();
 
-        // 1. Validar campos obligatorios
-        if (!nombre || !correo || !contrasena) {
+        // 1. Validar campos obligatorios. La cédula es obligatoria: el admin la
+        //    usa para asignarle el contrato al inquilino (sp_Contrato_Insertar la
+        //    busca por cédula) y sin ella el inquilino no puede recibir contrato.
+        if (!nombre || !correo || !contrasena || !cedula) {
             return res.status(400).json({ message: 'Todos los campos son obligatorios' });
         }
 

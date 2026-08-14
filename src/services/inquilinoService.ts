@@ -83,6 +83,7 @@ export interface CrearReservaInquilinoPayload {
 export interface CrearReservaInquilinoResponse {
   message: string;
   id_reserva: number | null;
+  /** Monto confirmado: lo calcula sp_CrearReservaPago (monto_pagado), no el cliente */
   monto: number;
 }
 

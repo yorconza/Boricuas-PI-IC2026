@@ -12,18 +12,24 @@ interface KPI {
 interface Reserva {
   id_reserva: number;
   hora: string;
-  area: string;
+  area_comun: string;
   residente: string;
+  estado: string;
 }
 
 interface Alerta {
+  tipo_alerta: string;
   mensaje: string;
-  prioridad: 'Alta' | 'Media';
+  prioridad: 'Alta' | 'Media' | 'Baja';
+  fecha_evento: string;
 }
 
 interface Actividad {
+  id_bitacora: number;
   descripcion: string;
+  tabla_afectada: string;
   fecha_evento: string;
+  minutos_transcurridos: number;
   color_indicador: string;
 }
 
@@ -36,61 +42,42 @@ interface DashboardData {
 
 export const dashboardService = {
   // id_usuario_actual: id del administrador autenticado (viene del JWT / middleware de auth).
-  // Todos los SPs de este módulo lo requieren para validar rol y setear CONTEXT_INFO.
+  // El SP valida internamente que el rol sea 'Administrador' (RAISERROR si no).
+  //
+  // sp_Dashboard_ObtenerDatos devuelve 4 recordsets en una sola ejecución:
+  //   [0] KPIs                  → 1 fila (reservas_hoy, visitas_registradas, ...)
+  //   [1] Próximas reservas     → TOP 5
+  //   [2] Alertas administrativas (contratos a vencer / pagos pendientes / áreas)
+  //   [3] Actividad reciente    → TOP 5 de Bitacora
   async obtenerResumen(id_usuario_actual: number): Promise<DashboardData> {
     const pool = await getConnection();
 
-    let kpis: KPI = {
+    const kpisVacios: KPI = {
       reservas_hoy: 0,
       visitas_registradas: 0,
       contratos_activos: 0,
       areas_ocupadas: 0,
       ingresos_del_dia: 0
     };
-    let proximasReservas: Reserva[] = [];
-    let alertas: Alerta[] = [];
-    let actividadReciente: Actividad[] = [];
 
-    // 1. KPIs
     try {
-      const kpisResult = await pool.request()
+      const result = await pool.request()
         .input('id_usuario_actual', sql.Int, id_usuario_actual)
-        .execute<KPI>('sp_Dashboard_ObtenerMetricas');
-      if (kpisResult.recordset[0]) kpis = kpisResult.recordset[0];
-    } catch (err: unknown) {
-      console.error('❌ ERROR KPIS:', err instanceof Error ? err.message : err);
-    }
+        .execute('sp_Dashboard_ObtenerDatos');
 
-    // 2. Próximas reservas
-    try {
-      const reservasResult = await pool.request()
-        .input('id_usuario_actual', sql.Int, id_usuario_actual)
-        .execute<Reserva>('sp_Dashboard_ListarProximasReservas');
-      proximasReservas = reservasResult.recordset || [];
-    } catch (err: unknown) {
-      console.error('❌ ERROR RESERVAS:', err instanceof Error ? err.message : err);
-    }
+      // recordsets: [KPIs, próximas reservas, alertas, actividad reciente]
+      const sets = (result.recordsets as unknown as unknown[][]) ?? [];
+      const kpis = (sets[0]?.[0] as KPI | undefined) ?? kpisVacios;
+      const proximasReservas = (sets[1] ?? []) as Reserva[];
+      const alertas = (sets[2] ?? []) as Alerta[];
+      const actividadReciente = (sets[3] ?? []) as Actividad[];
 
-    // 3. Alertas administrativas
-    try {
-      const alertasResult = await pool.request()
-        .input('id_usuario_actual', sql.Int, id_usuario_actual)
-        .execute<Alerta>('sp_Dashboard_ListarAlertas');
-      alertas = alertasResult.recordset || [];
+      return { kpis, proximasReservas, alertas, actividadReciente };
     } catch (err: unknown) {
-      console.error('❌ ERROR ALERTAS:', err instanceof Error ? err.message : err);
+      // Si el SP falla (p. ej. no está creado aún o el rol no es administrador),
+      // se devuelve el dashboard vacío en lugar de tumbar el endpoint.
+      console.error('❌ ERROR sp_Dashboard_ObtenerDatos:', err instanceof Error ? err.message : err);
+      return { kpis: kpisVacios, proximasReservas: [], alertas: [], actividadReciente: [] };
     }
-
-    // 4. Actividad reciente
-    try {
-      const actividadResult = await pool.request()
-        .input('id_usuario_actual', sql.Int, id_usuario_actual)
-        .execute<Actividad>('sp_Dashboard_ListarActividadReciente');
-      actividadReciente = actividadResult.recordset || [];
-    } catch (err: unknown) {
-      console.error('❌ ERROR ACTIVIDAD:', err instanceof Error ? err.message : err);
-    }
-
-    return { kpis, proximasReservas, alertas, actividadReciente };
   }
 };

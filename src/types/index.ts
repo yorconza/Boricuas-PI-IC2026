@@ -7,8 +7,8 @@
  * Todas las interfaces y tipos compartidos del sistema.
  *
  * Responsabilidades
- * - Definir la estructura de datos de: Area, Reserva, Visitante, Personal,
- *   Residente, Contrato, Pago, ActivityItem, AlertaItem, NotificationItem
+ * - Definir la estructura de datos de: Reserva, Visitante, Personal,
+ *   Residente, Contrato, AreaInquilino, ActivityItem, NotificationItem
  * - Definir tipos auxiliares como UserRole y PageId
  *
  * Se comunica con
@@ -17,22 +17,11 @@
  * - Cada página usa estos tipos para mostrar datos
  *
  * Datos actuales
- * Interfaces completas para la versión mock. Cuando llegue el backend,
- * algunos campos podrían cambiar (ej: IDs numéricos a UUIDs).
+ * Las páginas consumen la API real del backend; estas interfaces tipan
+ * las respuestas y el estado global.
  *
  * ============================================================================
  */
-
-export interface Area {
-  id: number;
-  nombre: string;
-  capacidad: string;
-  hora_inicio: string;
-  hora_fin: string;
-  costo: string;
-  imagen: string;
-  estado: string;
-}
 
 // Para el panel de Inquilino (estructura diferente)
 export interface AreaInquilino {
@@ -47,17 +36,17 @@ export interface AreaInquilino {
 }
 
 /**
- * NOTA (cambio para compilar con `tsc -b`):
- * En la app conviven DOS formas de `Reserva` con vocabularios distintos:
- *  - Forma API/Admin (id_reserva, id_area, cantidad_personas, estado
+ * NOTA: en la app conviven DOS formas de `Reserva` con vocabularios distintos:
+ *  - Forma panel Admin (id_reserva, id_area, cantidad_personas, estado
  *    'Reservado'|'Completado'|'Cancelado') usada por ReservasPage.tsx y por
  *    DataContext.recargarReservas() (panel admin).
- *  - Forma UI/Mock (id, personas, costo, pago_estado, estados
- *    'Confirmada'|'Pendiente'|'Cancelada'|...) usada por el panel de inquilino
- *    (MisReservasPage, NuevaReservaPage, InquilinoDashboard) y por sampleData.ts.
+ *  - Forma panel Inquilino (id, personas, costo, pago_estado, estados
+ *    'Confirmada'|'Pendiente'|'Cancelada'|...) usada por MisReservasPage,
+ *    NuevaReservaPage e InquilinoDashboard; se llena desde la API de inquilino
+ *    (recargarReservasInquilino → inquilinoService).
  * Se amplió la interfaz para admitir ambas formas: `estado` pasa a ser string
- * y los campos de la forma API quedan opcionales (la UI los lee con `??`/`!`),
- * mientras los de la forma UI/mock son obligatorios porque las páginas los
+ * y los campos de la forma admin quedan opcionales (la UI los lee con `??`/`!`),
+ * mientras los de la forma inquilino son obligatorios porque las páginas los
  * consumen como valores garantizados.
  */
 export interface Reserva {
@@ -66,13 +55,15 @@ export interface Reserva {
   fecha: string;            // 'YYYY-MM-DD'
   hora_inicio: string;      // 'HH:mm:ss'
   hora_fin: string;         // 'HH:mm:ss'
-  // Unión de TODOS los estados usados por ambas formas (API: 'Reservado' |
-  // 'Completado' | 'Cancelado'; UI/mock: 'Confirmada' | 'Pendiente' | 'Cancelada' | 'Finalizado').
+  // Unión de los estados usados por ambas formas (admin: 'Reservado' |
+  // 'Completado' | 'Cancelado'; inquilino: 'Confirmada' | 'Pendiente' |
+  // 'Cancelada' | 'Finalizada' — sp_FinalizarReservasVencidas escribe
+  // 'Finalizada' en femenino).
   // Se usa la unión (no `string`) para que `tsc -b` compile y aun así detecte
   // estados mal escritos (ej: 'Canceladdo').
-  estado: 'Reservado' | 'Completado' | 'Cancelado' | 'Confirmada' | 'Pendiente' | 'Cancelada' | 'Finalizado';
+  estado: 'Reservado' | 'Completado' | 'Cancelado' | 'Confirmada' | 'Pendiente' | 'Cancelada' | 'Finalizada';
 
-  // --- Forma Backend/API (panel Admin) ---
+  // --- Forma panel Admin ---
   id_reserva?: number;
   id_usuario?: number;
   residente?: string;
@@ -82,7 +73,7 @@ export interface Reserva {
   monto?: number | null;
   fecha_creacion?: string;
 
-  // --- Forma UI/Mock (panel Inquilino y sampleData) ---
+  // --- Forma panel Inquilino ---
   id: number;
   departamento?: string;
   personas: number;
@@ -208,16 +199,6 @@ export interface BitacoraResponse {
   datos: BitacoraRegistro[];
 }
 
-export interface Pago {
-  id: number;
-  residente: string;
-  concepto: string;
-  monto: string;
-  fecha: string;
-  metodo: string;
-  estado: string;
-}
-
 export interface ActivityItem {
   id: number;
   descripcion: string;
@@ -228,24 +209,19 @@ export interface ActivityItem {
   timestamp: number;
 }
 
-export interface AlertaItem {
-  id: number;
-  descripcion: string;
-  prioridad: string;
-  icono: string;
-  color: string;
-  fecha: string;
-  timestamp: number;
-}
-
 export interface NotificationItem {
   id: number;
   title: string;
   message: string;
+  /** Texto de hora; la UI moderna usa el timestamp y getTimeAgo ("hace 5 min"). */
   time: string;
   read: boolean;
   icon: string;
   timestamp: number;
+  /** Tipo del evento en la BD (NUEVA_SOLICITUD_VISITA, RESERVA_CREADA, etc.). */
+  tipo?: string;
+  /** ID de la entidad relacionada (reserva, visita, usuario...) — enlaces directos. */
+  id_referencia?: number | null;
 }
 
 export interface ProfileData {
@@ -267,10 +243,10 @@ export interface User {
 export type PageId =
   // Admin
   | 'dashboard' | 'actividad' | 'personal' | 'residentes'
-  | 'departamentos' | 'areas' | 'reservas' | 'empresas'
+  | 'departamentos' | 'areas' | 'reservas' | 'visitas-autorizadas'
   | 'contratos' | 'pagos' | 'reportes' | 'bitacora' | 'configuracion'
   // Guardia
   | 'visitas'
   // Inquilino
-  | 'reservar-area' | 'nueva-reserva' | 'mis-reservas'
+  | 'reservar-area' | 'nueva-reserva' | 'mis-reservas' | 'mis-contratos'
   | 'registrar-visitante' | 'mis-visitantes';

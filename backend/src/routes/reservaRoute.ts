@@ -3,9 +3,9 @@ import {
     getReservasHoy,
     getEstadisticasMensuales,
     getHistorialReservas,
+    getHistorialReservasPaginado,
     createReserva,
-    updateReserva,
-    cancelarReserva
+    updateReserva
 } from '../controllers/reservaController.js';
 import { authenticateToken, require2FA } from '../middlewares/auth.js';
 import { validateSessionAndSetContext } from '../middlewares/session.js';
@@ -28,6 +28,10 @@ reserva.get('/', protegerAdmin, getHistorialReservas);
 // GET /api/reservas/hoy -> Obtiene solo las reservas del día actual
 reserva.get('/hoy', protegerAdmin, getReservasHoy);
 
+// GET /api/reservas/historial -> Historial paginado (mismo formato que
+// /api/visitas/historial: { pagina, limite, totalRegistros, totalPaginas, datos })
+reserva.get('/historial', protegerAdmin, getHistorialReservasPaginado);
+
 // GET /api/reservas/estadisticas -> Estadísticas para los KPI
 reserva.get('/estadisticas', protegerAdmin, getEstadisticasMensuales);
 
@@ -37,6 +41,9 @@ reserva.get('/estadisticas', protegerAdmin, getEstadisticasMensuales);
 // 3. Modificaciones (POST, PUT, PATCH)
 reserva.post('/', protegerAdmin, createReserva);
 reserva.put('/:id', protegerAdmin, updateReserva);
-reserva.patch('/:id/cancelar', protegerAdmin, cancelarReserva);
+
+// NOTA (cambio): NO existe ruta de cancelación para el administrador.
+// Las reservas solo las cancela el inquilino dueño, vía
+// PATCH /api/inquilino/reservas/:id → sp_CancelarReserva.
 
 export default reserva;
