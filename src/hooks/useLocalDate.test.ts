@@ -16,6 +16,7 @@ import {
   getLocalDateTimeString,
   formatHora,
   formatHoraAMPM,
+  toTimeOnly,
   getTimeAgo,
   getGreeting,
 } from './useLocalDate';
@@ -80,6 +81,27 @@ describe('formatHora', () => {
 
   it('debe retornar --:-- para undefined/null', () => {
     expect(formatHora('')).toBe('--:--');
+  });
+
+  it('debe retornar --:-- para entradas malformadas sin ":" (regresión: ISO de TIME de SQL Server)', () => {
+    // SQL Server serializa columnas TIME como "1970-01-01T13:00:00.000Z";
+    // antes esto crasheaba con "Cannot read properties of undefined (reading 'toString')".
+    expect(formatHora('1970-01-01T13:00:00.000Z')).toBe('--:--');
+    expect(formatHora('1970-')).toBe('--:--');
+  });
+});
+
+// ============================================================
+// toTimeOnly
+// ============================================================
+describe('toTimeOnly', () => {
+  it('debe convertir el ISO de TIME de SQL Server a HH:mm:ss', () => {
+    expect(toTimeOnly('1970-01-01T13:00:00.000Z')).toBe('13:00:00');
+  });
+
+  it('debe dejar las horas planas "HH:mm[:ss]" igual', () => {
+    expect(toTimeOnly('08:00')).toBe('08:00');
+    expect(toTimeOnly('08:00:30')).toBe('08:00:30');
   });
 });
 

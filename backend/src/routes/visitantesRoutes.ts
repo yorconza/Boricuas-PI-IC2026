@@ -1,23 +1,61 @@
+/**
+ * ============================================================================
+ * Archivo: visitantesRoutes.ts
+ * ============================================================================
+ *
+ * ¿Qué hace?
+ * Define las rutas del módulo de control de visitas del panel ADMIN
+ * (montadas en /api/visitas desde server.ts):
+ *
+ *   GET /api/visitas/hoy          → sp_ListarVisitasDelDia (visitas de HOY)
+ *   GET /api/visitas/historial    → sp_ListarHistorialVisitantes (paginado)
+ *   GET /api/visitas/detalle/:id  → sp_ObtenerDetalleVisitante
+ *
+ * Protección:
+ *   - /hoy y /detalle/:id: Administrador | Guarda (los SPs también validan rol).
+ *   - /historial: SOLO Administrador. El middleware authorizeRole ya rechaza
+ *     con 403 a otros roles; además el controlador traduce el RAISERROR del
+ *     SP en HTTP 403 como red de seguridad.
+ *
+ * Usa la misma cadena de middlewares que el resto de módulos:
+ * JWT (401) → 2FA verificado (403) → sesión activa + SET CONTEXT_INFO (401)
+ * → authorizeRole (403).
+ *
+ * ============================================================================
+ */
 import { Router } from 'express';
 import {
-  getVisitasAutorizadas,
-  createVisitante,
-  updateVisitante,
-  desactivarVisitante
-} from '../controllers/visitantesController.js'; // Mantén la extensión .js si tu proyecto usa ES Modules en Node
+    getVisitasDelDia,
+    getHistorialVisitantes,
+    getDetalleVisitante
+} from '../controllers/visitantesController.js';
+import { authenticateToken, require2FA } from '../middlewares/auth.js';
+import { validateSessionAndSetContext } from '../middlewares/session.js';
+import { authorizeRole } from '../middlewares/roles.js';
 
-const router = Router();
+const visitantes: Router = Router();
 
-// GET /api/visitantes (soporta query params: ?busqueda=...&estado=...&solo_hoy=...)
-router.get('/', getVisitasAutorizadas);
+// Cadena de protección estándar (sin authorizeRole, que se agrega por ruta).
+const proteger = [
+    authenticateToken,
+    require2FA,
+    validateSessionAndSetContext,
+];
 
-// POST /api/visitantes
-router.post('/', createVisitante);
+// /hoy y /detalle/:id → Guardas y Administradores (los SPs aceptan ambos roles).
+const protegerAdminYGuarda = [...proteger, authorizeRole('Administrador', 'Guarda')];
 
-// PUT /api/visitantes/:id
-router.put('/:id', updateVisitante);
+// /historial → solo Administradores (sp_ListarHistorialVisitantes).
+const protegerAdmin = [...proteger, authorizeRole('Administrador')];
 
-// PATCH /api/visitantes/:id/desactivar
-router.patch('/:id/desactivar', desactivarVisitante);
+// GET /api/visitas/hoy?busqueda=...&estado=... → Visitas de HOY en cualquier
+// estado (Pendiente/Autorizado/Rechazado).
+visitantes.get('/hoy', protegerAdminYGuarda, getVisitasDelDia);
 
-export default router;
+// GET /api/visitas/historial?busqueda=...&estado=...&fechaInicio=...&fechaFin=...&pageNumber=1&pageSize=50
+visitantes.get('/historial', protegerAdmin, getHistorialVisitantes);
+
+// GET /api/visitas/detalle/:id → Detalle de una visita (modal/drawer)
+visitantes.get('/detalle/:id', protegerAdminYGuarda, getDetalleVisitante);
+
+export default visitantes;

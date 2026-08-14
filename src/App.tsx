@@ -80,6 +80,7 @@ import InquilinoDashboard from './pages/inquilino/InquilinoDashboard';
 import ReservarAreaPage from './pages/inquilino/ReservarAreaPage';
 import NuevaReservaPage from './pages/inquilino/NuevaReservaPage';
 import MisReservasPage from './pages/inquilino/MisReservasPage';
+import MisContratosPage from './pages/inquilino/MisContratosPage';
 import RegistrarVisitantePage from './pages/inquilino/RegistrarVisitantePage';
 import MisVisitantesPage from './pages/inquilino/MisVisitantesPage';
 import InquilinoConfig from './pages/inquilino/InquilinoConfig';
@@ -141,7 +142,7 @@ function AdminRouter() {
       case 'departamentos': return <DepartamentosPage />;
       case 'reservas': return <ReservasPage />;
       case 'areas': return <AreasPage />;
-      case 'empresas': return <VisitasPage />;
+      case 'visitas-autorizadas': return <VisitasPage />;
       case 'pagos': return <PagosPage />;
       case 'reportes': return <ReportesPage />;
       // Módulo de auditoría (Bitácora)
@@ -205,6 +206,7 @@ function InquilinoRouter() {
       case 'reservar-area': return <ReservarAreaPage onSelectArea={(id) => { setSelectedAreaId(id); window.location.hash = 'nueva-reserva'; }} />;
       case 'nueva-reserva': return <NuevaReservaPage preselectedAreaId={selectedAreaId} />;
       case 'mis-reservas': return <MisReservasPage />;
+      case 'mis-contratos': return <MisContratosPage />;
       case 'registrar-visitante': return <RegistrarVisitantePage />;
       case 'mis-visitantes': return <MisVisitantesPage />;
       case 'configuracion': return <InquilinoConfig />;

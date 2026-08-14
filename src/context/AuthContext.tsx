@@ -43,7 +43,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { UserRole, ProfileData } from '../types';
 import type { Usuario } from '../types/auth';
-import { adminProfile, guardiaProfile, inquilinoProfile } from '../data/sampleData';
 import { authService } from '../services/authService';
 import { perfilService, buildAvatarUrl } from '../services/perfilService';
 import { TOKEN_KEY, USUARIO_KEY } from '../services/apiClient';
@@ -51,10 +50,30 @@ import { TOKEN_KEY, USUARIO_KEY } from '../services/apiClient';
 // ver nota en ese archivo sobre react-refresh y la colisión de nombres en Windows).
 import { AuthContext, type AuthContextType } from '../hooks/useAuth';
 
+// Perfiles base por rol (API anterior). construirPerfil los usa como plantilla
+// y luego los sobreescribe con los datos reales del backend.
 const profileMap: Record<UserRole, ProfileData> = {
-  admin: adminProfile,
-  guardia: guardiaProfile,
-  inquilino: inquilinoProfile,
+  admin: {
+    nombre: 'Administrador',
+    correo: 'admin@condominio.com',
+    telefono: '+506 8888-9999',
+    password: 'admin123',
+    avatar: ''
+  },
+  guardia: {
+    nombre: 'Guarda',
+    correo: 'guarda@condominio.com',
+    telefono: '+506 7777-8888',
+    password: 'guardia123',
+    avatar: ''
+  },
+  inquilino: {
+    nombre: 'Jeremy',
+    correo: 'jeremy@condominio.com',
+    telefono: '+506 6666-7777',
+    password: 'jeremy123',
+    avatar: ''
+  },
 };
 
 const rolMap: Record<string, UserRole> = {

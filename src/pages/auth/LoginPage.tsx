@@ -9,7 +9,7 @@
  *
  * Componentes que utiliza
  * - useAuth (contexto de autenticación)
- * - authService (servicio de autenticación simulado)
+ * - authService (servicio de autenticación real contra el backend)
  * - React Router (navegación)
  *
  * Flujo
@@ -108,8 +108,13 @@ export default function LoginPage() {
     }
 
     // Mismas validaciones de formato que el módulo Personal del admin:
-    // cédula 1-234-56789 (9 dígitos) y teléfono 7777-7777 (8 dígitos).
-    // Campos opcionales: vacío no es error, pero si se llenan deben respetar el formato.
+    // cédula 1-2345-6789 (9 dígitos) y teléfono 7777-7777 (8 dígitos).
+    // La CÉDULA es OBLIGATORIA: el inquilino la necesita para que el admin le
+    // asigne un contrato (sp_Contrato_Insertar la busca por cédula).
+    if (!cedula.trim()) {
+      setErrorRegistro('La cédula es obligatoria.');
+      return;
+    }
     const errorTelefono = validarTelefono(phone);
     if (errorTelefono) {
       setErrorRegistro(errorTelefono);
@@ -128,7 +133,7 @@ export default function LoginPage() {
         correo: signupEmail,
         contrasena: signupPassword,
         telefono: phone || undefined,
-        cedula: cedula || undefined,
+        cedula,
       });
       setErrorRegistro(null);
       setMensajeLogin('Cuenta creada exitosamente. Inicia sesión con tu correo.');
@@ -238,7 +243,7 @@ export default function LoginPage() {
                 <input
                   type="text"
                   id="cedula"
-                  placeholder="1-234-56789"
+                  placeholder="1-2345-6789"
                   maxLength={11}
                   value={cedula}
                   onChange={e => setCedula(formatearCedula(e.target.value))}

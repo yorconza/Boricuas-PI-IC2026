@@ -11,12 +11,6 @@ interface AdminDashboardProps {
   onNavigate: (page: string) => void;
 }
 
-const COLOR_INDICADOR: Record<string, string> = {
-  verde: '#22c55e',
-  amarillo: '#eab308',
-  azul: '#3b82f6',
-};
-
 interface ReservaDashboard {
   id_reserva: number;
   hora: string;
@@ -29,13 +23,8 @@ interface AlertaDashboard {
   prioridad: 'Alta' | 'Media' | 'Baja';
 }
 
-interface ActividadDashboard {
-  descripcion: string;
-  color_indicador?: string;
-}
-
 export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
-  const { dashboardData, recargarDashboard } = useData();
+  const { dashboardData, activityLog, recargarDashboard } = useData();
 
   useEffect(() => {
     recargarDashboard();
@@ -55,11 +44,12 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
   };
 
   // Soporte defensivo para 'ingresos_dia' o 'ingresos_del_dia'
-  const ingresos = kpis.ingresos_del_dia ?? (kpis as Record<string, unknown>).ingresos_dia as number ?? 0;
+  const ingresos = kpis.ingresos_del_dia ?? (kpis as { ingresos_dia?: number }).ingresos_dia ?? 0;
 
   const proximasReservas = (dashboardData.proximasReservas ?? []) as ReservaDashboard[];
   const alertas = (dashboardData.alertas ?? []) as AlertaDashboard[];
-  const actividadReciente = (dashboardData.actividadReciente ?? []) as ActividadDashboard[];
+  // Actividad reciente: seguimiento LOCAL del admin (localStorage), no de la BD.
+  const actividadReciente = activityLog;
 
   return (
     <>
@@ -73,7 +63,7 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
           <div className="kpi-value" id="kpiReservasHoy">{kpis.reservas_hoy}</div>
         </div>
 
-        <div className="kpi-card" onClick={() => onNavigate('visitas')} tabIndex={0} role="button">
+        <div className="kpi-card" onClick={() => onNavigate('visitas-autorizadas')} tabIndex={0} role="button">
           <div className="kpi-icon"><i className="fas fa-user-check"></i></div>
           <div className="kpi-label">Visitas registradas</div>
           <div className="kpi-value">{kpis.visitas_registradas}</div>
@@ -158,12 +148,12 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
               <p style={{ color: 'var(--text-muted)', padding: 'var(--space-2) 0' }}>No hay actividad reciente.</p>
             ) : (
               actividadReciente.map((item, index) => (
-                <div key={index} className="activity-item">
+                <div key={item.id ?? index} className="activity-item">
                   <span
                     className="activity-dot"
-                    style={{ background: COLOR_INDICADOR[item.color_indicador ?? ''] || 'var(--primary-color, #007bff)' }}
+                    style={{ background: item.color || 'var(--primary-color, #007bff)' }}
                   ></span>
-                  <span className="activity-text">{item.descripcion}</span>
+                  <span className="activity-text" dangerouslySetInnerHTML={{ __html: item.descripcion }}></span>
                 </div>
               ))
             )}

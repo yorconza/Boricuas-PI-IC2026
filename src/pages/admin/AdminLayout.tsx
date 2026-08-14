@@ -47,7 +47,7 @@ const navGroups = [
     items: [
       { href: '#reservas', label: 'Reservas', icon: 'fa-calendar-check', page: 'reservas' },
       { href: '#areas', label: 'Áreas comunes', icon: 'fa-umbrella-beach', page: 'areas' },
-      { href: '#empresas', label: 'Visitas autorizadas', icon: 'fa-building', page: 'empresas' },
+      { href: '#visitas-autorizadas', label: 'Visitas autorizadas', icon: 'fa-user-check', page: 'visitas-autorizadas' },
     ]
   },
   {
@@ -79,7 +79,7 @@ const pageTitles: Record<string, string> = {
   residentes: 'Residentes',
   areas: 'Áreas comunes',
   reservas: 'Reservas',
-  empresas: 'Visitas autorizadas',
+  'visitas-autorizadas': 'Visitas autorizadas',
   contratos: 'Contratos',
   departamentos: 'Departamentos',
   pagos: 'Pagos',

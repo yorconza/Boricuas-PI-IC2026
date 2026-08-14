@@ -45,6 +45,9 @@ export function getLocalDateTimeString(date: Date = new Date()): string {
 export function formatHora(hora24: string): string {
   if (!hora24) return '--:--';
   const [h, m] = hora24.split(':').map(Number);
+  // Entradas malformadas (sin ":", ej. un Date serializado por SQL Server)
+  // no deben romper el render: se devuelve el placeholder en vez de crashear.
+  if (Number.isNaN(h) || Number.isNaN(m)) return '--:--';
   const ampm = h >= 12 ? 'PM' : 'AM';
   const h12 = h % 12 || 12;
   return `${h12.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${ampm}`;

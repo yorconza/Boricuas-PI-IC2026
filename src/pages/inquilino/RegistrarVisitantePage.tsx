@@ -18,14 +18,13 @@
  */
 
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/PageHeader';
 import { useData } from '../../context/DataContext';
 import { useToast } from '../../components/Toast';
 import { inquilinoService } from '../../services/inquilinoService';
+import { formatearCedula } from '../../utils/formatters';
 
 export default function RegistrarVisitantePage() {
-  const navigate = useNavigate();
   const { recargarVisitantesInquilino, addNotification } = useData();
   const { showToast } = useToast();
   const [nombre, setNombre] = useState('');
@@ -33,6 +32,15 @@ export default function RegistrarVisitantePage() {
   const [placa, setPlaca] = useState('');
   const [horaEsperada, setHoraEsperada] = useState('');
   const [enviando, setEnviando] = useState(false);
+
+  /**
+   * Máscara adaptativa del documento: si se escriben solo dígitos se formatea
+   * como cédula costarricense (1-2345-6789); si aparecen letras (pasaporte u
+   * otro documento) el campo queda libre para no romper datos alfanuméricos.
+   */
+  const cambiarDocumento = (valor: string) => {
+    setDocumento(/^[\d-]*$/.test(valor) ? formatearCedula(valor) : valor);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,13 +60,16 @@ export default function RegistrarVisitantePage() {
 
       await recargarVisitantesInquilino();
 
+      // NOTA (cambio): ya NO se redirige a "Mis Visitantes" — el usuario pidió
+      // quedarse en este formulario tras registrar. La lista se recarga en el
+      // fondo (recargarVisitantesInquilino) y se limpia el formulario para
+      // registrar otro visitante; el toast confirma el éxito.
       showToast(`Visitante ${nombre} registrado exitosamente.`, 'success');
       addNotification('inquilino', 'Nuevo visitante', `Has registrado a ${nombre} como visitante.`);
       setNombre('');
       setDocumento('');
       setPlaca('');
       setHoraEsperada('');
-      navigate('/inquilino#mis-visitantes');
     } catch (err) {
       console.error('Error al registrar visitante:', err);
       showToast('No se pudo registrar el visitante. Intenta de nuevo.', 'error');
@@ -78,7 +89,15 @@ export default function RegistrarVisitantePage() {
           </div>
           <div className="form-group">
             <label htmlFor="visitanteDocumento">Documento de identidad *</label>
-            <input type="text" id="visitanteDocumento" required placeholder="Cédula o pasaporte" value={documento} onChange={e => setDocumento(e.target.value)} />
+            <input
+              type="text"
+              id="visitanteDocumento"
+              required
+              placeholder="Cédula o pasaporte"
+              title="Cédula: 1-2345-6789 · pasaporte: alfanumérico"
+              value={documento}
+              onChange={e => cambiarDocumento(e.target.value)}
+            />
           </div>
           <div className="form-group">
             <label htmlFor="visitantePlaca">Placa (opcional)</label>

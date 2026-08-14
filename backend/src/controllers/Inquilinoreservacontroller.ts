@@ -1,6 +1,7 @@
 import { type Request, type Response } from 'express';
 import { getConnection } from '../config/confDB.js';
 import sql from 'mssql';
+import { finalizarReservasVencidas } from '../services/reservaService.js';
 
 // Mapea el método de pago que envía el frontend (NuevaReservaPage.tsx: 'tarjeta' |
 // 'efectivo' | 'sinpe') al valor permitido por el CHECK de la tabla Pago
@@ -31,22 +32,11 @@ export const crearReserva = async (req: Request, res: Response) => {
 
         const pool = await getConnection();
 
-        // El monto se calcula en el servidor (no se confía en un monto que
-        // pudiera enviar el cliente) a partir del costo_por_hora real del área.
-        const areaResult = await pool?.request()
-            .input('id_area', sql.Int, Number(id_area))
-            .query('SELECT costo_por_hora FROM AreaComun WHERE id_area = @id_area');
-
-        const costoPorHora = areaResult?.recordset?.[0]?.costo_por_hora;
-        if (costoPorHora === undefined) {
-            return res.status(400).json({ message: 'El área indicada no existe.' });
-        }
-
-        const [h1 = 0, m1 = 0] = String(hora_inicio).split(':').map(Number);
-        const [h2 = 0, m2 = 0] = String(hora_fin).split(':').map(Number);
-        const horas = ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
-        const monto = Number((costoPorHora * horas).toFixed(2));
-
+        // NOTA (cambio - sp_CrearReservaPago actualizado): el SP ya NO recibe
+        // @monto; calcula el monto en el servidor (duración en horas enteras ×
+        // costo_por_hora) y lo devuelve en el recordset como monto_pagado.
+        // Antes se enviaba .input('monto', ...) y el SP fallaba con
+        // "too many arguments specified".
         const result = await pool?.request()
             .input('id_usuario', sql.Int, Number(id_usuario_actual))
             .input('id_area', sql.Int, Number(id_area))
@@ -55,15 +45,18 @@ export const crearReserva = async (req: Request, res: Response) => {
             .input('hora_fin', sql.VarChar, hora_fin)
             .input('cantidad_personas', sql.Int, cantidad_personas)
             .input('tipo_pago', sql.VarChar, mapMetodoPago(metodo_pago))
-            .input('monto', sql.Decimal(10, 2), monto)
             .execute('sp_CrearReservaPago');
 
-        const nuevoId = result?.recordset?.[0]?.id_reserva ?? null;
+        // El monto pagado definitivo lo calcula el SP (monto_calculado); se
+        // devuelve al frontend para mostrarlo en el comprobante/toast.
+        const row = result?.recordset?.[0];
+        const nuevoId = row?.id_reserva ?? null;
+        const montoPagado = Number(row?.monto_pagado ?? 0);
 
         return res.status(201).json({
             message: 'Reserva creada y pago confirmado correctamente',
             id_reserva: nuevoId,
-            monto
+            monto: montoPagado
         });
     } catch (error: unknown) {
         console.error("Error:", error);
@@ -89,6 +82,12 @@ export const getMisReservas = async (req: Request, res: Response) => {
         const { estado } = req.query;
 
         const pool = await getConnection();
+
+        // Auto-finalización (lazy): antes de listar, las reservas cuya hora fin
+        // ya pasó pasan a 'Finalizada' (sp_FinalizarReservasVencidas), para que
+        // "Mis Reservas" muestre el estado real.
+        await finalizarReservasVencidas(pool);
+
         const result = await pool?.request()
             .input('id_usuario_actual', sql.Int, Number(id_usuario_actual))
             .input('estado', sql.VarChar, estado ? String(estado) : null)
@@ -112,6 +111,11 @@ export const getProximaReserva = async (req: Request, res: Response) => {
         }
 
         const pool = await getConnection();
+
+        // Auto-finalización (lazy): la próxima reserva no debe ser una que ya
+        // terminó, así que primero se finalizan las vencidas.
+        await finalizarReservasVencidas(pool);
+
         const result = await pool?.request()
             .input('id_usuario_actual', sql.Int, Number(id_usuario_actual))
             .execute('sp_ObtenerMiProximaReserva');

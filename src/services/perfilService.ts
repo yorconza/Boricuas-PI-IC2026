@@ -20,7 +20,7 @@
  * uploadAvatar usa fetch() crudo con FormData y solo el header Authorization.
  * ============================================================================
  */
-import { api, ApiError, API_URL, BASE_URL, TOKEN_KEY, USUARIO_KEY } from './apiClient';
+import { api, ApiError, API_URL, TOKEN_KEY, USUARIO_KEY, buildStaticUrl } from './apiClient';
 
 /** Perfil tal como lo devuelve GET /api/perfil (sp_ObtenerPerfil). */
 export interface PerfilBackend {
@@ -54,11 +54,7 @@ export interface UploadAvatarResponse {
  * - Si ya empieza con http:// o https:// → se usa tal cual (URL externa).
  * - Si es una ruta local (/uploads/...) → se antepone la URL base del servidor.
  */
-export const buildAvatarUrl = (ruta: string | null | undefined): string => {
-  if (!ruta) return '';
-  if (/^https?:\/\//i.test(ruta)) return ruta;
-  return `${BASE_URL}${ruta}`;
-};
+export const buildAvatarUrl = buildStaticUrl;
 
 export const perfilService = {
   /**

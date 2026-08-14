@@ -32,6 +32,7 @@ const navGroups = [
   { items: [{ href: '#dashboard', label: 'Dashboard', icon: 'fa-th-large', page: 'dashboard' }] },
   { items: [{ href: '#reservar-area', label: 'Reservar Área', icon: 'fa-plus-circle', page: 'reservar-area' }] },
   { items: [{ href: '#mis-reservas', label: 'Mis Reservas', icon: 'fa-calendar-alt', page: 'mis-reservas' }] },
+  { items: [{ href: '#mis-contratos', label: 'Mis Contratos', icon: 'fa-file-signature', page: 'mis-contratos' }] },
   { items: [{ href: '#registrar-visitante', label: 'Registrar Visitante', icon: 'fa-user-plus', page: 'registrar-visitante' }] },
   { items: [{ href: '#mis-visitantes', label: 'Mis Visitantes', icon: 'fa-users', page: 'mis-visitantes' }] },
   { items: [{ href: '#configuracion', label: 'Configuración', icon: 'fa-cog', page: 'configuracion' }] }
@@ -42,6 +43,7 @@ const pageTitles: Record<string, string> = {
   'reservar-area': 'Reservar Área',
   'nueva-reserva': 'Nueva Reserva',
   'mis-reservas': 'Mis Reservas',
+  'mis-contratos': 'Mis Contratos',
   'registrar-visitante': 'Registrar Visitante',
   'mis-visitantes': 'Mis Visitantes',
   configuracion: 'Configuración'

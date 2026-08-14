@@ -8,8 +8,7 @@
  * las visitas esperadas, autorizarlas o rechazarlas con un motivo, y
  * consultar el historial del día.
  *
- * NOTA (cambio): Ya NO usa datos simulados. Todo se carga desde la API real
- * del backend (guardService → /api/guard/visits/*):
+ * Todo se carga desde la API del backend (guardService → /api/guard/visits/*):
  *   - "Visitas esperadas"   → GET /visits/pending (búsqueda en servidor)
  *   - "Historial del día"   → GET /visits/history (búsqueda + estado)
  *   - Autorizar / Rechazar  → PATCH /visits/:id/status
@@ -28,6 +27,10 @@ import { useToast } from '../../components/Toast';
 import { useAlert } from '../../components/Alert';
 import { ApiError } from '../../services/apiClient';
 import { guardService, type VisitaEsperada, type VisitaHistorial, type DetalleVisita } from '../../services/guardService';
+
+// Cada cuánto se recarga la tabla activa desde la BD, para que las nuevas
+// solicitudes de visitantes aparezcan sin recargar la página.
+const INTERVALO_REFRESCO_VISITAS_MS = 30_000;
 
 type Tab = 'esperadas' | 'historial';
 
@@ -66,31 +69,33 @@ export default function GuardiaVisitas() {
   // cierra el modal o abre otro detalle mientras una petición está en vuelo.
   const detalleRequestRef = useRef(0);
 
-  const cargarEsperadas = useCallback(async (query?: string) => {
-    setLoadingEsperadas(true);
-    setError(null);
+  const cargarEsperadas = useCallback(async (query?: string, silencioso = false) => {
+    // silencioso=true (polling/foco): no activa el indicador de carga ni pisa
+    // el error, para que la tabla no parpadee "Cargando…" cada 30 s.
+    if (!silencioso) setLoadingEsperadas(true);
+    if (!silencioso) setError(null);
     try {
       const data = await guardService.getVisitasEsperadas(query);
       setEsperadas(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Error al cargar visitas esperadas:', err);
-      setError('No se pudieron cargar las visitas esperadas.');
+      if (!silencioso) setError('No se pudieron cargar las visitas esperadas.');
     } finally {
-      setLoadingEsperadas(false);
+      if (!silencioso) setLoadingEsperadas(false);
     }
   }, []);
 
-  const cargarHistorial = useCallback(async (query?: string, estado?: string) => {
-    setLoadingHistorial(true);
-    setError(null);
+  const cargarHistorial = useCallback(async (query?: string, estado?: string, silencioso = false) => {
+    if (!silencioso) setLoadingHistorial(true);
+    if (!silencioso) setError(null);
     try {
       const data = await guardService.getHistorialVisitas(query, estado);
       setHistorial(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Error al cargar el historial:', err);
-      setError('No se pudieron cargar las visitas del historial.');
+      if (!silencioso) setError('No se pudieron cargar las visitas del historial.');
     } finally {
-      setLoadingHistorial(false);
+      if (!silencioso) setLoadingHistorial(false);
     }
   }, []);
 
@@ -115,6 +120,27 @@ export default function GuardiaVisitas() {
       cargarHistorial(debouncedSearch, filterEstado);
     }
     /* eslint-enable react-hooks/set-state-in-effect */
+  }, [currentTab, debouncedSearch, filterEstado, cargarEsperadas, cargarHistorial]);
+
+  // Refresco automático de la pestaña activa: cada 30 s y al volver a enfocar
+  // la ventana, para ver las nuevas solicitudes de visitantes sin recargar.
+  // Los setState ocurren dentro de los callbacks diferidos (interval/focus),
+  // no de forma síncrona en el efecto.
+  useEffect(() => {
+    const refrescar = () => {
+      if (currentTab === 'esperadas') {
+        void cargarEsperadas(debouncedSearch, true);
+      } else {
+        void cargarHistorial(debouncedSearch, filterEstado, true);
+      }
+    };
+    const timer = setInterval(refrescar, INTERVALO_REFRESCO_VISITAS_MS);
+    const onFocus = () => refrescar();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+    };
   }, [currentTab, debouncedSearch, filterEstado, cargarEsperadas, cargarHistorial]);
 
   // Refresca solo la lista de la pestaña activa tras autorizar/rechazar

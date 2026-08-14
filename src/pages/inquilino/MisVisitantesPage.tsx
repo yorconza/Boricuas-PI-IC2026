@@ -24,26 +24,48 @@
  * El modal de confirmación (useAlert().confirmar) se mantiene igual.
  *
  * También se agregó 'Cancelado' además de 'Cancelada' al chequear el badge
- * de estado: en Inquilinoreservacontroller.ts vimos que el backend guarda
- * el estado cancelado en masculino ('Cancelado') aunque el mock/UI usaba
- * 'Cancelada' — por consistencia se contempla el mismo caso aquí para que
- * el badge no caiga en el 'badge-error' genérico si sp_CancelarVisitante
- * hace lo mismo.
+ * de estado: el backend guarda el estado cancelado en masculino ('Cancelado')
+ * mientras el resto de la UI usa 'Cancelada' — por consistencia se contempla
+ * el mismo caso aquí para que el badge no caiga en el 'badge-error' genérico
+ * si sp_CancelarVisitante hace lo mismo.
  * ============================================================================
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useData } from '../../context/DataContext';
 import { useToast } from '../../components/Toast';
 import { useAlert } from '../../components/Alert';
 import { formatHoraAMPM } from '../../hooks/useLocalDate';
 import { inquilinoService } from '../../services/inquilinoService';
 
+/** Cada cuánto se refresca la lista (mismo intervalo que el resto de módulos). */
+const INTERVALO_REFRESCO_MS = 30_000;
+
 export default function MisVisitantesPage() {
   const { inquilinoVisitantesData, recargarVisitantesInquilino, addNotification } = useData();
   const { showToast } = useToast();
   const { confirmar } = useAlert();
   const [cancelandoId, setCancelandoId] = useState<number | null>(null);
+
+  // Refresco automático: cada 30 s y al volver a enfocar la ventana, en modo
+  // silencioso (recargarVisitantesInquilino no activa indicadores de carga),
+  // para que las decisiones del guardia (Autorizado/Rechazado) y las nuevas
+  // solicitudes aparezcan sin recargar la página.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      void recargarVisitantesInquilino();
+    }, INTERVALO_REFRESCO_MS);
+
+    const onFocus = () => {
+      void recargarVisitantesInquilino();
+    };
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [recargarVisitantesInquilino]);
 
   const verDetalleVisitante = (id: number) => {
     const visitante = inquilinoVisitantesData.find(v => v.id === id);

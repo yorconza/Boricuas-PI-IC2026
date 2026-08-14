@@ -238,6 +238,36 @@ Las rutas `/api/guard` están protegidas con
 `authenticateToken → validateSessionAndSetContext → authorizeRole('Guarda')`.
 En el frontend, `/guardia/*` está protegido por `PrivateRoute roles={['Guarda']}`.
 
+### Visitas (panel Administrador)
+
+Mismo SP de historial del día que el guardia, más el historial completo
+paginado y el detalle. El `id_usuario_actual` siempre se inyecta desde el JWT
+(`req.user`), nunca desde el cliente.
+
+| Método | Ruta | SP | Descripción |
+|---|---|---|---|
+| `GET` | `/api/visitas/hoy?busqueda=&estado=` | `sp_ListarVisitasDelDia` *(nuevo)* | Visitas de HOY en CUALQUIER estado (Pendiente/Autorizado/Rechazado), sin paginar |
+| `GET` | `/api/visitas/historial?busqueda=&estado=&fechaInicio=&fechaFin=&pageNumber=&pageSize=` | `sp_ListarHistorialVisitantes` | Historial paginado **solo de días pasados** (respuesta `{ pagina, limite, totalRegistros, totalPaginas, datos }`) |
+| `GET` | `/api/visitas/detalle/:id` | `sp_ObtenerDetalleVisitante` | Detalle completo de una visita (modal/drawer) |
+
+Protección por ruta:
+- `/hoy` y `/detalle/:id` → `Administrador | Guarda` (los SPs también validan rol).
+- `/historial` → **solo Administrador**. El middleware `authorizeRole` devuelve
+  `403` a otros roles, y el RAISERROR del SP también se traduce a HTTP 403 como
+  respaldo.
+
+Reglas de las pestañas (aplicadas en los SPs, no en el controlador):
+- **"Hoy"** = visitas cuya `fecha_hora_estimada` cae HOY, en cualquier estado,
+  vía `sp_ListarVisitasDelDia` (SP dedicado, incluye Pendiente). El SP de
+  "historial del día" (`sp_ListarHistorialVisitas_Del_Dia`) solo devuelve
+  visitas ya decididas (Autorizado/Rechazado), por eso se creó uno nuevo.
+- **"Historial"** = visitas con `fecha_hora_estimada` ANTERIOR a HOY: el propio
+  `sp_ListarHistorialVisitantes` filtra `fecha_hora_estimada < HOY`. Nunca
+  muestra HOY ni visitas futuras, sin importar los filtros que envíe el cliente.
+- Los parámetros de fecha del historial se envían como **VARCHAR**, no
+  `DateTime2`: el driver `mssql` desplaza los DateTime2 por la zona horaria
+  (+6 h) y el filtro quedaría corrido.
+
 ---
 
 ## 📡 7. Probar la API con curl
@@ -280,6 +310,8 @@ curl -X POST http://localhost:4000/api/auth/recuperar-restablecer \
 | `sp_VerificarYExpirarSesion` | Auth | Valida sesión activa (inactividad 30 min) |
 | `sp_GenerarCodigo2FA` / `sp_VerificarCodigo2FA` | 2FA | Guarda/valida el código de 6 dígitos |
 | `sp_ObtenerResumenVisitasHoy`, `sp_ListarProximasVisitas`, `sp_ListarVisitasEsperadas`, `sp_ListarHistorialVisitas_Del_Dia`, `sp_ObtenerDetalleVisitante`, `sp_RegistrarIngresoVisitante` | Guardia | Panel del guardia y control de visitas |
+| `sp_ListarVisitasDelDia` | Visitas (Admin) | Visitas de HOY en cualquier estado (pestaña "Hoy") |
+| `sp_ListarHistorialVisitantes` | Visitas (Admin) | Historial paginado con filtros, solo días anteriores a HOY |
 
 > La recuperación de contraseña **no** requiere SPs nuevos: usa la tabla
 > `TokenRecuperacion` con consultas parametrizadas directas desde el controlador.

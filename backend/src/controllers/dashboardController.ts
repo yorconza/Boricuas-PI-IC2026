@@ -13,8 +13,6 @@ export const getDashboardSummary = async (req: Request, res: Response): Promise<
 
     // 2. Pasar el id_usuario al servicio
     const data = await dashboardService.obtenerResumen(id_usuario);
-    
-    console.log('📊 DATOS ENVIADOS DESDE EL BACKEND:', JSON.stringify(data, null, 2));
 
     res.status(200).json(data);
   } catch (error: unknown) {

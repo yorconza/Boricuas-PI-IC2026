@@ -18,6 +18,8 @@ import { useState } from 'react';
 import PageHeader from '../../components/PageHeader';
 import Drawer from '../../components/Drawer';
 import { useAlert } from '../../components/Alert';
+import { pagosService } from '../../services/pagosService';
+import { reportesService } from '../../services/reportesService';
 
 export default function ReportesPage() {
   const { showAlert } = useAlert();
@@ -28,30 +30,31 @@ export default function ReportesPage() {
 
   const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-  // 🚀 Función para abrir/descargar el PDF real desde Node.js
-  const ejecutarDescargaPDF = (tipo: string, fechaInicio: string, fechaFin: string) => {
-    const baseUrl = 'http://localhost:4000/api';
+  // 🚀 Función para descargar el PDF real desde Node.js.
+  // Los 4 reportes exigen token JWT (los endpoints ya NO son públicos): se
+  // descargan vía servicio (fetch con Authorization + blob), respetando el
+  // rango de fechas. Antes contratos/reservas se abrían con window.open a un
+  // endpoint público.
+  const descargadores: Record<string, (fi?: string, ff?: string) => Promise<void>> = {
+    pagos: (fi, ff) => pagosService.descargarReportePdf(fi, ff),
+    visitas: (fi, ff) => reportesService.descargarVisitasPdf(fi, ff),
+    contratos: (fi, ff) => reportesService.descargarContratosPdf(fi, ff),
+    reservas: (fi, ff) => reportesService.descargarReservasPdf(fi, ff),
+  };
 
-    // 1. Si no es un reporte disponible, mostramos alerta y salimos
-    if (tipo !== 'contratos' && tipo !== 'reservas') {
+  const ejecutarDescargaPDF = async (tipo: string, fechaInicio: string, fechaFin: string) => {
+    const descargar = descargadores[tipo];
+    if (!descargar) {
       showAlert(`El reporte de ${tipo} estará disponible próximamente.`);
       return;
     }
-
-    // 2. Definimos el endpoint según el tipo
-  const endpoint = tipo === 'contratos'
-    ? `${baseUrl}/reportes/contratos/pdf`
-    : `${baseUrl}/reportes/reservas/pdf`;
-
-    // 3. Construimos los parámetros URL si existen fechas
-    const params = new URLSearchParams();
-    if (fechaInicio) params.append('fechaInicio', fechaInicio);
-    if (fechaFin) params.append('fechaFin', fechaFin);
-
-    const queryString = params.toString() ? `?${params.toString()}` : '';
-
-    // 4. Abrimos el PDF en nueva pestaña y cerramos el drawer
-    window.open(`${endpoint}${queryString}`, '_blank');
+    try {
+      await descargar(fechaInicio || undefined, fechaFin || undefined);
+      showAlert(`Reporte de ${tipo} generado correctamente.`, { titulo: 'Éxito', tipo: 'success' });
+    } catch (err: unknown) {
+      const e = err as Error;
+      showAlert(e.message || 'No se pudo generar el reporte.', { titulo: 'Error', tipo: 'error' });
+    }
     setDrawerOpen(false);
   };
 

@@ -221,7 +221,7 @@ export default function ResidentesPage() {
             </div>
             <div className="form-group">
               <label>Cédula</label>
-              <input type="text" value={form.cedula} onChange={e => setCampo('cedula', formatearCedula(e.target.value))} placeholder="1-234-56789" maxLength={11} />
+              <input type="text" value={form.cedula} onChange={e => setCampo('cedula', formatearCedula(e.target.value))} placeholder="1-2345-6789" maxLength={11} />
             </div>
           </div>
           <div className="form-row">
