@@ -9,7 +9,16 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { formatearMoneda, formatearTelefono, formatearCedula, validarCedula } from './formatters';
+import {
+  formatearMoneda,
+  formatearTelefono,
+  formatearCedula,
+  validarCedula,
+  validarTelefono,
+  formatearPlaca,
+  validarPlaca,
+  validarCorreoDominio,
+} from './formatters';
 
 // ============================================================
 // formatearMoneda
@@ -88,11 +97,87 @@ describe('validarCedula', () => {
   });
 
   it('debe rechazar el formato antiguo 1-234-56789', () => {
-    expect(validarCedula('1-234-56789')).toBe('La cédula debe tener el formato 1-2345-6789 (9 dígitos).');
+    expect(validarCedula('1-234-56789')).toBe('La cédula debe tener el formato 1-2345-6789 y comenzar con un dígito válido (1-7).');
   });
 
   it('debe aceptar cédulas vacías (opcional, no es error)', () => {
     expect(validarCedula('')).toBeNull();
     expect(validarCedula('   ')).toBeNull();
+  });
+
+  it('debe rechazar cédulas que empiezan con 0, 8 o 9', () => {
+    expect(validarCedula('0-2345-6789')).toBe('La cédula debe tener el formato 1-2345-6789 y comenzar con un dígito válido (1-7).');
+    expect(validarCedula('8-2345-6789')).toBe('La cédula debe tener el formato 1-2345-6789 y comenzar con un dígito válido (1-7).');
+    expect(validarCedula('9-2345-6789')).toBe('La cédula debe tener el formato 1-2345-6789 y comenzar con un dígito válido (1-7).');
+  });
+
+  it('debe aceptar cédulas que empiezan con 1 o 2 (válidas en CR)', () => {
+    expect(validarCedula('1-2345-6789')).toBeNull();
+    expect(validarCedula('2-3456-7890')).toBeNull();
+  });
+});
+
+// ============================================================
+// validarTelefono
+// ============================================================
+describe('validarTelefono', () => {
+  it('debe rechazar 0000-0000', () => {
+    expect(validarTelefono('0000-0000')).toBe('El teléfono no puede ser 0000-0000.');
+  });
+
+  it('debe aceptar un teléfono válido 7777-7777', () => {
+    expect(validarTelefono('7777-7777')).toBeNull();
+  });
+});
+
+// ============================================================
+// formatearPlaca / validarPlaca
+// ============================================================
+describe('formatearPlaca', () => {
+  it('debe formatear abc123 como ABC-123 (mayúsculas y guion)', () => {
+    expect(formatearPlaca('abc123')).toBe('ABC-123');
+  });
+
+  it('debe limitar a 6 caracteres y limpiar símbolos', () => {
+    expect(formatearPlaca('abc-123xyz')).toBe('ABC-123');
+  });
+
+  it('debe dejar sin guion mientras hay 3 o menos caracteres', () => {
+    expect(formatearPlaca('ab')).toBe('AB');
+  });
+});
+
+describe('validarPlaca', () => {
+  it('debe aceptar ABC-123', () => {
+    expect(validarPlaca('ABC-123')).toBeNull();
+  });
+
+  it('debe rechazar formatos inválidos', () => {
+    expect(validarPlaca('ABC12')).toBe('La placa debe tener el formato ABC-123 (3 letras + 3 números).');
+    expect(validarPlaca('123-ABC')).toBe('La placa debe tener el formato ABC-123 (3 letras + 3 números).');
+  });
+
+  it('debe aceptar placas vacías (opcional, no es error)', () => {
+    expect(validarPlaca('')).toBeNull();
+  });
+});
+
+// ============================================================
+// validarCorreoDominio
+// ============================================================
+describe('validarCorreoDominio', () => {
+  it('debe aceptar gmail, hotmail, outlook y yahoo', () => {
+    expect(validarCorreoDominio('hola@gmail.com')).toBeNull();
+    expect(validarCorreoDominio('hola@hotmail.com')).toBeNull();
+    expect(validarCorreoDominio('hola@outlook.com')).toBeNull();
+    expect(validarCorreoDominio('hola@yahoo.com')).toBeNull();
+  });
+
+  it('debe rechazar dominios fuera de la lista', () => {
+    expect(validarCorreoDominio('hola@perrastodas.com')).toBe('Solo se permiten correos con dominio público (gmail.com, hotmail.com, outlook.com, yahoo.com).');
+  });
+
+  it('debe aceptar correos vacíos (opcional, no es error)', () => {
+    expect(validarCorreoDominio('')).toBeNull();
   });
 });

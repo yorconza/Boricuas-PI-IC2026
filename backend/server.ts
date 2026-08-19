@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { getConnection } from './src/config/confDB.js';
+import { limpiarContexto } from './src/services/contextoService.js';
 
 import personalRoute from './src/routes/personalRoute.js';
 import residenteRoute from './src/routes/residenteRoute.js';
@@ -56,6 +57,25 @@ app.use(cors({
 
 // Servir archivos estáticos
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// --- Auditoría: cada request arranca con CONTEXT_INFO limpio ---
+// Los triggers de bitácora leen CONTEXT_INFO (dbo.fn_UsuarioSesion) para
+// saber quién ejecutó cada operación. La única conexión física del backend
+// (pool max:1) conserva el valor entre peticiones, así que sin esta limpieza
+// las acciones del SISTEMA (recuperación de contraseña, 2FA, registro,
+// limpiezas) quedarían atribuidas al último usuario autenticado.
+// Quien sí debe atribuirse a un usuario es validateSessionAndSetContext, que
+// ejecuta SET CONTEXT_INFO(id_usuario) después de este middleware.
+app.use(async (_req: Request, _res: Response, next: () => void) => {
+  try {
+    const pool = await getConnection();
+    await limpiarContexto(pool);
+  } catch {
+    // Si la BD no responde se continúa: los endpoints protegidos fallarán
+    // igual en el middleware de sesión, y el health check reporta el estado.
+  }
+  next();
+});
 
 // --- Endpoint de Health Check ---
 app.get('/api/health', async (req: Request, res: Response) => {

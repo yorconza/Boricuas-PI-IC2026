@@ -77,7 +77,9 @@ export default function ProfileDrawer({
 
   // --- Cambio de contraseña ---
   const [contrasenaActual, setContrasenaActual] = useState('');
+  const [showContrasenaActual, setShowContrasenaActual] = useState(false);
   const [nuevaContrasena, setNuevaContrasena] = useState('');
+  const [showNuevaContrasena, setShowNuevaContrasena] = useState(false);
   const [cambiandoContrasena, setCambiandoContrasena] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -403,23 +405,43 @@ export default function ProfileDrawer({
         <h4>Cambiar contraseña</h4>
         <div className="form-group">
           <label>Contraseña actual</label>
-          <input
-            type="password"
-            id="profileCurrentPassword"
-            placeholder="Ingresa tu contraseña actual"
-            value={contrasenaActual}
-            onChange={e => setContrasenaActual(e.target.value)}
-          />
+          <div className="password-field">
+            <input
+              type={showContrasenaActual ? 'text' : 'password'}
+              id="profileCurrentPassword"
+              placeholder="Ingresa tu contraseña actual"
+              value={contrasenaActual}
+              onChange={e => setContrasenaActual(e.target.value)}
+            />
+            <button
+              type="button"
+              className="password-toggle"
+              aria-label={showContrasenaActual ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              onClick={() => setShowContrasenaActual(v => !v)}
+            >
+              <i className={`fas ${showContrasenaActual ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+            </button>
+          </div>
         </div>
         <div className="form-group">
           <label>Nueva contraseña</label>
-          <input
-            type="password"
-            id="profileNewPassword"
-            placeholder="Mínimo 6 caracteres"
-            value={nuevaContrasena}
-            onChange={e => setNuevaContrasena(e.target.value)}
-          />
+          <div className="password-field">
+            <input
+              type={showNuevaContrasena ? 'text' : 'password'}
+              id="profileNewPassword"
+              placeholder="Mínimo 6 caracteres"
+              value={nuevaContrasena}
+              onChange={e => setNuevaContrasena(e.target.value)}
+            />
+            <button
+              type="button"
+              className="password-toggle"
+              aria-label={showNuevaContrasena ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              onClick={() => setShowNuevaContrasena(v => !v)}
+            >
+              <i className={`fas ${showNuevaContrasena ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+            </button>
+          </div>
         </div>
         <button
           className="btn-secondary btn-change-password"

@@ -1,3 +1,24 @@
+/**
+ * ============================================================================
+ * Archivo: contratoReporteController.ts
+ * ============================================================================
+ *
+ * ¿Qué hace?
+ * Endpoint para descargar el reporte de contratos en formato PDF.
+ *   GET /api/reporte-contratos/pdf?fechaInicio=YYYY-MM-DD&fechaFin=YYYY-MM-DD
+ *
+ * Flujo:
+ *   1. Extrae fechas del query string (acepta camelCase y snake_case).
+ *   2. Llama a obtenerContratosParaReporte() (contratoService.ts).
+ *   3. Genera el PDF con PdfService.generarPdfContratos() y lo envía.
+ *
+ * Se comunica con:
+ *   - contratoService.ts (obtenerContratosParaReporte → sp_ObtenerReporteContratos).
+ *   - pdfService.ts (PdfService.generarPdfContratos).
+ *   - Ruta: contratoReporteRoute.ts.
+ *
+ * ============================================================================
+ */
 import { type Request, type Response } from 'express';
 import { obtenerContratosParaReporte } from '../services/contratoService.js';
 import { PdfService } from '../services/pdfService.js';

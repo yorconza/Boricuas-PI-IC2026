@@ -1,3 +1,25 @@
+/**
+ * ============================================================================
+ * Archivo: residenteRoute.ts
+ * ============================================================================
+ *
+ * ¿Qué hace?
+ * Define las rutas del módulo de Residentes (montadas en /api/residentes
+ * desde server.ts):
+ *
+ *   GET    /api/residentes                           → sp_Residente_Listar
+ *   POST   /api/residentes                           → sp_Residente_Insertar
+ *   PUT    /api/residentes/:id                       → sp_Residente_Actualizar
+ *   PATCH  /api/residentes/:id/changeEstadoResidente → sp_Residente_CambiarEstado
+ *
+ * Protección: JWT → 2FA → sesión + SET CONTEXT_INFO → rol Administrador.
+ *
+ * Se comunica con:
+ *   - residentesControllers.ts (handler de cada ruta).
+ *   - server.ts (montaje en /api/residentes).
+ *
+ * ============================================================================
+ */
 import { Router } from 'express';
 import {
     getResidentes,

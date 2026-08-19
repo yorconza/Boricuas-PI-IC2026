@@ -29,10 +29,10 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { preferenciaService } from '../services/preferenciaService';
 
-export type Tema = 'light' | 'dark' | 'system';
-export type Fuente = 'Inter' | 'SF Pro' | 'System';
-export type TamanoFuente = 'small' | 'medium' | 'large';
-export type Idioma = 'es' | 'en';
+type Tema = 'light' | 'dark' | 'system';
+type Fuente = 'Inter' | 'SF Pro' | 'System';
+type TamanoFuente = 'small' | 'medium' | 'large';
+type Idioma = 'es' | 'en';
 
 interface PreferenciasContextValue {
   tema: Tema;

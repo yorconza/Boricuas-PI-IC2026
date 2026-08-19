@@ -1,3 +1,28 @@
+/**
+ * ============================================================================
+ * Archivo: departamentoController.ts
+ * ============================================================================
+ *
+ * ¿Qué hace?
+ * Controller del módulo de Departamentos (panel Admin). CRUD para gestionar
+ * los departamentos del condominio:
+ *
+ *   getDepartamentos            → sp_Departamento_Listar (filtros: número, estado, activo)
+ *   createDepartamento          → sp_Departamento_Insertar
+ *   updateDepartamento          → sp_Departamento_Actualizar
+ *   changeEstadoDepartamento    → sp_Departamento_CambiarEstado (desactivar/reactivar)
+ *
+ * Seguridad:
+ *   - Rutas protegidas por JWT + 2FA + sesión + rol Administrador.
+ *   - id_usuario_actual se toma del token (req.user).
+ *
+ * Se comunica con:
+ *   - SQL Server vía confDB.getConnection().
+ *   - Ruta: departamentoRoute.ts.
+ *   - Frontend: DepartamentosPage.tsx.
+ *
+ * ============================================================================
+ */
 import { type Request, type Response } from 'express';
 import { getConnection } from '../config/confDB.js';
 import sql from 'mssql';

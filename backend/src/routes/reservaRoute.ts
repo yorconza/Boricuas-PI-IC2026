@@ -1,11 +1,34 @@
+/**
+ * ============================================================================
+ * Archivo: reservaRoute.ts
+ * ============================================================================
+ *
+ * ¿Qué hace?
+ * Define las rutas del módulo de Reservas (panel Admin, SOLO LECTURA),
+ * montadas en /api/reservas desde server.ts:
+ *
+ *   GET /api/reservas            → sp_ConsultarHistorial (listado completo)
+ *   GET /api/reservas/hoy        → sp_ListarReservas (solo del día)
+ *   GET /api/reservas/historial  → sp_ConsultarHistorial (paginado)
+ *   GET /api/reservas/estadisticas → sp_EstadisticasMensuales
+ *
+ * No hay POST/PUT/PATCH: la creación y cancelación de reservas es del
+ * inquilino (POST/PATCH /api/inquilino/reservas).
+ *
+ * Protección: JWT → 2FA → sesión + SET CONTEXT_INFO → rol Administrador.
+ *
+ * Se comunica con:
+ *   - reservaController.ts (handler de cada ruta).
+ *   - server.ts (montaje en /api/reservas).
+ *
+ * ============================================================================
+ */
 import { Router } from 'express';
 import {
     getReservasHoy,
     getEstadisticasMensuales,
     getHistorialReservas,
-    getHistorialReservasPaginado,
-    createReserva,
-    updateReserva
+    getHistorialReservasPaginado
 } from '../controllers/reservaController.js';
 import { authenticateToken, require2FA } from '../middlewares/auth.js';
 import { validateSessionAndSetContext } from '../middlewares/session.js';
@@ -38,12 +61,8 @@ reserva.get('/estadisticas', protegerAdmin, getEstadisticasMensuales);
 // 2. Ruta dinámica GET con :id
 // reserva.get('/:id', protegerAdmin, getDetalleReserva);
 
-// 3. Modificaciones (POST, PUT, PATCH)
-reserva.post('/', protegerAdmin, createReserva);
-reserva.put('/:id', protegerAdmin, updateReserva);
-
-// NOTA (cambio): NO existe ruta de cancelación para el administrador.
-// Las reservas solo las cancela el inquilino dueño, vía
-// PATCH /api/inquilino/reservas/:id → sp_CancelarReserva.
+// 3. El panel admin es SOLO LECTURA: no hay POST/PUT/PATCH.
+// Las reservas se crean (sp_CrearReservaPago) y cancelan (sp_CancelarReserva)
+// únicamente desde el flujo del inquilino: POST/PATCH /api/inquilino/reservas.
 
 export default reserva;

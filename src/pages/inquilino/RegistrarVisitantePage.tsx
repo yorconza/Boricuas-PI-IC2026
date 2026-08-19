@@ -22,7 +22,19 @@ import PageHeader from '../../components/PageHeader';
 import { useData } from '../../context/DataContext';
 import { useToast } from '../../components/Toast';
 import { inquilinoService } from '../../services/inquilinoService';
-import { formatearCedula } from '../../utils/formatters';
+import { formatearCedula, formatearPlaca, validarPlaca } from '../../utils/formatters';
+
+/** Próxima media hora redondeada (HH:mm) — valor por defecto de "Hora esperada". */
+const proximaMediaHora = (): string => {
+  const ahora = new Date();
+  ahora.setSeconds(0, 0);
+  if (ahora.getMinutes() >= 30) {
+    ahora.setHours(ahora.getHours() + 1, 0, 0, 0);
+  } else {
+    ahora.setMinutes(30, 0, 0);
+  }
+  return `${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`;
+};
 
 export default function RegistrarVisitantePage() {
   const { recargarVisitantesInquilino, addNotification } = useData();
@@ -30,7 +42,9 @@ export default function RegistrarVisitantePage() {
   const [nombre, setNombre] = useState('');
   const [documento, setDocumento] = useState('');
   const [placa, setPlaca] = useState('');
-  const [horaEsperada, setHoraEsperada] = useState('');
+  // Valor por defecto = próxima media hora: evita el "--:-- --" nativo de
+  // Firefox en inputs type="time" vacíos y asegura una hora futura.
+  const [horaEsperada, setHoraEsperada] = useState(() => proximaMediaHora());
   const [enviando, setEnviando] = useState(false);
 
   /**
@@ -49,9 +63,27 @@ export default function RegistrarVisitantePage() {
       return;
     }
 
+    // Hora esperada no puede ser una hora que ya pasó hoy
+    if (horaEsperada) {
+      const ahora = new Date();
+      const [h, m] = horaEsperada.split(':').map(Number);
+      const fechaHora = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate(), h, m);
+      if (fechaHora.getTime() < ahora.getTime()) {
+        showToast('La hora esperada no puede ser anterior a la hora actual.', 'error');
+        return;
+      }
+    }
+
+    // Placa opcional: si se llenó, debe cumplir el formato ABC-123
+    const errorPlaca = validarPlaca(placa);
+    if (errorPlaca) {
+      showToast(errorPlaca, 'error');
+      return;
+    }
+
     setEnviando(true);
     try {
-      await inquilinoService.registrarVisitante({
+      const resp = await inquilinoService.registrarVisitante({
         nombre_completo: nombre,
         documento_identidad: documento,
         placa: placa || undefined,
@@ -65,7 +97,7 @@ export default function RegistrarVisitantePage() {
       // fondo (recargarVisitantesInquilino) y se limpia el formulario para
       // registrar otro visitante; el toast confirma el éxito.
       showToast(`Visitante ${nombre} registrado exitosamente.`, 'success');
-      addNotification('inquilino', 'Nuevo visitante', `Has registrado a ${nombre} como visitante.`);
+      addNotification('inquilino', 'Nuevo visitante', `Has registrado a ${nombre} como visitante.`, 'fa-user-plus', resp?.id_visitante ?? null);
       setNombre('');
       setDocumento('');
       setPlaca('');
@@ -101,7 +133,15 @@ export default function RegistrarVisitantePage() {
           </div>
           <div className="form-group">
             <label htmlFor="visitantePlaca">Placa (opcional)</label>
-            <input type="text" id="visitantePlaca" placeholder="Número de placa" value={placa} onChange={e => setPlaca(e.target.value)} />
+            <input
+              type="text"
+              id="visitantePlaca"
+              placeholder="ABC-123"
+              maxLength={7}
+              title="Formato de placa de carro: ABC-123"
+              value={placa}
+              onChange={e => setPlaca(formatearPlaca(e.target.value))}
+            />
           </div>
           <div className="form-group">
             <label htmlFor="visitanteHoraEsperada">Hora esperada</label>

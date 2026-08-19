@@ -136,7 +136,7 @@ export default function MisReservasPage() {
       await recargarReservasInquilino();
 
       const mensaje = tieneReembolso ? 'El monto será reembolsado completamente.' : 'No aplica reembolso por cancelación con poca anticipación.';
-      addNotification('inquilino', 'Reserva cancelada', `Cancelaste la reserva de ${reserva.area}. ${mensaje}`);
+      addNotification('inquilino', 'Reserva cancelada', `Cancelaste la reserva de ${reserva.area}. ${mensaje}`, 'fa-calendar-times', reserva.id);
       showToast(`Reserva de ${reserva.area} cancelada. ${mensaje}`, tieneReembolso ? 'success' : 'error');
     } catch (error: unknown) {
       const err = error as Error;

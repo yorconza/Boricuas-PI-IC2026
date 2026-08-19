@@ -117,6 +117,14 @@ export const register = async (req: Request, res: Response) => {
             });
         }
 
+        // 2b. Misma política de contraseña que la recuperación (REGEX_CONTRASENA):
+        // mín 8 con mayúscula, minúscula, número y símbolo (@$!%*?&).
+        if (typeof contrasena !== 'string' || !REGEX_CONTRASENA.test(contrasena)) {
+            return res.status(400).json({
+                message: 'La contraseña debe tener al menos 8 caracteres, una mayúscula, una minúscula, un número y un símbolo (@$!%*?&).',
+            });
+        }
+
         // 3. Hashear la contraseña con bcrypt (10 rondas)
         const hash = await bcrypt.hash(contrasena, SALT_ROUNDS);
 

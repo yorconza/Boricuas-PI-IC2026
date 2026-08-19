@@ -1,3 +1,33 @@
+/**
+ * ============================================================================
+ * Archivo: reservaController.ts
+ * ============================================================================
+ *
+ * ¿Qué hace?
+ * Controller del módulo de Reservas (panel Admin) — SOLO LECTURA. El admin
+ * puede consultar pero NO crear/editar/cancelar reservas (eso es del inquilino):
+ *
+ *   getReservasHoy              → sp_ListarReservas (reservas del día)
+ *   getHistorialReservas        → sp_ConsultarHistorial (filtros completos, sin paginación)
+ *   getHistorialReservasPaginado → sp_ConsultarHistorial (con paginación OFFSET-FETCH)
+ *   getEstadisticasMensuales    → sp_EstadisticasMensuales (KPIs)
+ *
+ * Auto-finalización (lazy):
+ *   - Antes de cada listado, sp_FinalizarReservasVencidas actualiza las
+ *     reservas cuya hora fin ya pasó a "Finalizada".
+ *
+ * Seguridad:
+ *   - Rutas protegidas por JWT + 2FA + sesión + rol Administrador.
+ *   - id_usuario_actual se toma del token (req.user).
+ *
+ * Se comunica con:
+ *   - SQL Server vía confDB.getConnection().
+ *   - reservaService.ts (finalizarReservasVencidas).
+ *   - Ruta: reservaRoute.ts.
+ *   - Frontend: ReservasPage.tsx, DataContext.tsx.
+ *
+ * ============================================================================
+ */
 import { type Request, type Response } from 'express';
 import { getConnection } from '../config/confDB.js';
 import sql from 'mssql';
@@ -23,7 +53,7 @@ export const getReservasHoy = async (req: Request, res: Response) => {
         // pasó o que HOY ya tienen hora_fin vencida pasan a 'Finalizada'
         // (sp_FinalizarReservasVencidas). El helper nunca lanza: si falla, el
         // listado sigue igual.
-        await finalizarReservasVencidas(pool);
+        await finalizarReservasVencidas(pool, idActual);
 
         const result = await pool?.request()
             .input('id_usuario_actual', sql.Int, idActual)
@@ -37,77 +67,15 @@ export const getReservasHoy = async (req: Request, res: Response) => {
     }
 };
 
-// 2. Crear reserva (sp_InsertarReserva)
-export const createReserva = async (req: Request, res: Response) => {
-    try {
-        const { id_usuario_actual, id_area, fecha, hora_inicio, hora_fin, cantidad_personas } = req.body ?? {};
+// NOTA (cambio): el panel admin de reservas es SOLO LECTURA — el administrador
+// no inserta, no actualiza ni elimina reservas. La creación de reservas es
+// responsabilidad del inquilino (POST /api/inquilino/reservas →
+// sp_CrearReservaPago, Inquilinoreservacontroller.crearReserva) y la
+// cancelación también (PATCH /api/inquilino/reservas/:id → sp_CancelarReserva).
+// Por eso aquí ya no existen createReserva (sp_InsertarReserva) ni
+// updateReserva (sp_ActualizarReserva): se eliminaron por no utilizarse.
 
-        // SEGURIDAD (cambio): con las rutas protegidas por JWT, el id_usuario_actual
-        // se toma del token firmado (req.user), NO del cliente. Así un atacante no
-        // puede suplantar a otro administrador inventando un id en el body.
-        // El fallback al body solo existe por compatibilidad con llamadas sin token.
-        const idActual = req.user?.id_usuario ?? (Number.isFinite(Number(id_usuario_actual)) ? Number(id_usuario_actual) : undefined);
-        if (!idActual) {
-            return res.status(400).json({ message: 'id_usuario_actual es obligatorio' });
-        }
-
-        const pool = await getConnection();
-        const result = await pool?.request()
-            .input('id_usuario_actual', sql.Int, idActual)
-            .input('id_area', sql.Int, id_area)
-            .input('fecha', sql.Date, fecha)
-            .input('hora_inicio', sql.VarChar, hora_inicio)
-            .input('hora_fin', sql.VarChar, hora_fin)
-            .input('cantidad_personas', sql.Int, cantidad_personas)
-            .execute('sp_InsertarReserva');
-
-        const nuevoIdReserva = result?.recordset?.[0]?.id_reserva_nueva ?? null;
-
-        return res.status(201).json({ 
-            message: "Reserva registrada exitosamente", 
-            id_reserva_nueva: nuevoIdReserva 
-        });
-    } catch (error: unknown) {
-        console.error("Error:", error);
-        const err = error as Error;
-        return res.status(400).json({ message: err.message || "Error interno del servidor" });
-    }
-};
-
-// 3. Actualizar reserva (sp_ActualizarReserva)
-export const updateReserva = async (req: Request, res: Response) => {
-    try {
-        const { id } = req.params; // id_reserva en la URL
-        const { id_usuario_actual, fecha, hora_inicio, hora_fin, cantidad_personas } = req.body ?? {};
-
-        // SEGURIDAD (cambio): con las rutas protegidas por JWT, el id_usuario_actual
-        // se toma del token firmado (req.user), NO del cliente. Así un atacante no
-        // puede suplantar a otro administrador inventando un id en el body.
-        // El fallback al body solo existe por compatibilidad con llamadas sin token.
-        const idActual = req.user?.id_usuario ?? (Number.isFinite(Number(id_usuario_actual)) ? Number(id_usuario_actual) : undefined);
-        if (!idActual) {
-            return res.status(400).json({ message: 'id_usuario_actual es obligatorio' });
-        }
-
-        const pool = await getConnection();
-        await pool?.request()
-            .input('id_usuario_actual', sql.Int, idActual)
-            .input('id_reserva', sql.Int, Number(id))
-            .input('fecha', sql.Date, fecha)
-            .input('hora_inicio', sql.VarChar, hora_inicio)
-            .input('hora_fin', sql.VarChar, hora_fin)
-            .input('cantidad_personas', sql.Int, cantidad_personas)
-            .execute('sp_ActualizarReserva');
-
-        return res.status(200).json({ message: "Reserva actualizada exitosamente" });
-    } catch (error: unknown) {
-        console.error("Error:", error);
-        const err = error as Error;
-        return res.status(400).json({ message: err.message || "Error interno del servidor" });
-    }
-};
-
-// 4. Consultar historial / Filtrar reservas (sp_ConsultarHistorial)
+// 2. Consultar historial / Filtrar reservas (sp_ConsultarHistorial)
 export const getHistorialReservas = async (req: Request, res: Response) => {
     try {
         const { 
@@ -133,7 +101,7 @@ export const getHistorialReservas = async (req: Request, res: Response) => {
 
         // Auto-finalización (lazy): antes de listar, las reservas vencidas
         // pasan a 'Finalizada' (sp_FinalizarReservasVencidas).
-        await finalizarReservasVencidas(pool);
+        await finalizarReservasVencidas(pool, idActual);
 
         const result = await pool?.request()
             .input('id_usuario_actual', sql.Int, idActual)
@@ -163,7 +131,7 @@ export const getHistorialReservas = async (req: Request, res: Response) => {
     }
 };
 
-// 4b. Historial paginado (sp_ConsultarHistorial con @page_number/@page_size y
+// 3. Historial paginado (sp_ConsultarHistorial con @page_number/@page_size y
 // @solo_historial = 1) — pestaña "Historial" del panel admin. Mismo formato
 // estándar de paginación del proyecto que /api/visitas/historial:
 //   { pagina, limite, totalRegistros, totalPaginas, datos }
@@ -195,7 +163,7 @@ export const getHistorialReservasPaginado = async (req: Request, res: Response) 
 
         // Auto-finalización (lazy): antes de listar, las reservas vencidas
         // pasan a 'Finalizada' (sp_FinalizarReservasVencidas).
-        await finalizarReservasVencidas(pool);
+        await finalizarReservasVencidas(pool, idActual);
 
         const result = await pool?.request()
             .input('id_usuario_actual', sql.Int, idActual)
@@ -236,14 +204,7 @@ export const getHistorialReservasPaginado = async (req: Request, res: Response) 
     }
 };
 
-// 5. Obtener detalle de una reserva (sp_ObtenerDetalleReserva)
-
-
-// NOTA (cambio): NO existe cancelación desde el panel administrador. Las
-// reservas solo las cancela el inquilino dueño, vía PATCH /api/inquilino/reservas/:id
-// (Inquilinoreservacontroller.updateReserva → sp_CancelarReserva).
-
-// 6. Estadísticas mensuales de reservas (sp_EstadisticasMensuales)
+// 4. Estadísticas mensuales de reservas (sp_EstadisticasMensuales)
 export const getEstadisticasMensuales = async (req: Request, res: Response) => {
     try {
         const { id_usuario_actual, anio, mes } = req.query;

@@ -1,3 +1,24 @@
+/**
+ * ============================================================================
+ * Archivo: reservasService.ts
+ * ============================================================================
+ *
+ * ¿Qué hace?
+ * Service que consulta sp_ObtenerReporteReservas para obtener las reservas
+ * en formato plano (ReservaReporte[]) destinado al PDF.
+ *
+ *   obtenerReservasParaReporte(fechaInicio?, fechaFin?) → ReservaReporte[]
+ *
+ * Los parámetros son opcionales: si no se envían, el SP devuelve todas las
+ * reservas sin filtro de fecha.
+ *
+ * Se comunica con:
+ *   - SQL Server vía confDB.getConnection().
+ *   - Controller: reservaReporteController.ts.
+ *   - pdfService.ts (generarPdfReservas recibe los datos que aquí se consultan).
+ *
+ * ============================================================================
+ */
 import sql from 'mssql';
 import { getConnection } from '../config/confDB.js';
 

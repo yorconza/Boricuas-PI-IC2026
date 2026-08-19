@@ -88,13 +88,13 @@ export default function DepartamentosPage() {
     try {
       setCargando(true);
       if (drawerMode === 'create') {
-        await crearDepartamento(numero.trim(), piso, metrosCuadrados);
+        const nuevoId = await crearDepartamento(numero.trim(), piso, metrosCuadrados);
         addActivity(`Nuevo departamento registrado: <strong>${numero.trim()}</strong>`, 'fa-door-open', 'var(--accent)');
-        addNotification('admin', 'Nuevo departamento', `Se registró el departamento ${numero.trim()}.`, 'fa-door-open');
+        addNotification('admin', 'Nuevo departamento', `Se registró el departamento ${numero.trim()}.`, 'fa-door-open', nuevoId);
       } else if (drawerMode === 'edit' && selectedItem) {
         await editarDepartamento(selectedItem.id_departamento, numero.trim(), piso, metrosCuadrados);
         addActivity(`Departamento editado: <strong>${numero.trim()}</strong>`, 'fa-edit', 'var(--accent)');
-        addNotification('admin', 'Departamento editado', `Se actualizó el departamento ${numero.trim()}.`, 'fa-edit');
+        addNotification('admin', 'Departamento editado', `Se actualizó el departamento ${numero.trim()}.`, 'fa-edit', selectedItem.id_departamento);
       }
 
       setDrawerOpen(false);
@@ -125,10 +125,10 @@ export default function DepartamentosPage() {
 
       if (!activar) {
         addActivity(`Departamento deshabilitado: <strong>${deleteItem.numero}</strong>`, 'fa-door-closed', 'var(--warning)');
-        addNotification('admin', 'Departamento deshabilitado', `El departamento ${deleteItem.numero} fue deshabilitado.`, 'fa-door-closed');
+        addNotification('admin', 'Departamento deshabilitado', `El departamento ${deleteItem.numero} fue deshabilitado.`, 'fa-door-closed', deleteItem.id_departamento);
       } else {
         addActivity(`Departamento habilitado: <strong>${deleteItem.numero}</strong>`, 'fa-user-check', 'var(--success)');
-        addNotification('admin', 'Departamento habilitado', `El departamento ${deleteItem.numero} fue habilitado.`, 'fa-user-check');
+        addNotification('admin', 'Departamento habilitado', `El departamento ${deleteItem.numero} fue habilitado.`, 'fa-user-check', deleteItem.id_departamento);
       }
 
       setModalOpen(false);

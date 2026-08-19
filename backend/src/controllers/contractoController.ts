@@ -1,8 +1,38 @@
+/**
+ * ============================================================================
+ * Archivo: contractoController.ts
+ * ============================================================================
+ *
+ * ¿Qué hace?
+ * Controller del módulo de Contratos (panel Admin). CRUD completo para
+ * gestionar contratos de alquiler de departamentos:
+ *
+ *   getContratos       → sp_Contrato_Listar (listado con filtros)
+ *   createContrato     → sp_Contrato_Insertar (alta con validación de fechas)
+ *   updateContrato     → sp_Contrato_Actualizar (edición con validación de fechas)
+ * * Reglas de negocio (backend):
+ *   - Monto mensual y depósito deben ser > 0.
+ *   - Al CREAR: fecha inicio >= hoy y fecha fin > fecha inicio.
+ *   - Al EDITAR: fecha fin > fecha inicio (no se exige inicio >= hoy porque
+ *     el contrato puede haber empezado en el pasado).
+ *
+ * Seguridad:
+ *   - Rutas protegidas por JWT + 2FA + sesión + rol Administrador.
+ *   - id_usuario_actual se toma del token (req.user), nunca del cliente.
+ *
+ * Se comunica con:
+ *   - SQL Server vía confDB.getConnection().
+ *   - Ruta: contratoRoute.ts (GET /, POST /, PUT /:id).
+ *   - Frontend: ContratosPage.tsx → contratoService.ts.
+ *
+ * ============================================================================
+ */
 import { type Request, type Response } from 'express';
 import { getConnection } from '../config/confDB.js';
 import sql from 'mssql';
 // Auto-finalización de contratos por fecha fin (ver services/contratoService.ts)
 import { finalizarContratosVencidos } from '../services/contratoService.js';
+import { getFechaActualDB } from '../services/timezoneService.js';
 
 // 1. Listar contrato (GET)
 export const getContratos = async (req: Request, res: Response) => {
@@ -66,6 +96,24 @@ export const createContrato = async (req: Request, res: Response) => {
         if (!Number.isFinite(montoMensualNum) || montoMensualNum <= 0 ||
             !Number.isFinite(montoDepositoNum) || montoDepositoNum <= 0) {
             return res.status(400).json({ message: 'El monto mensual y el monto de depósito deben ser mayores a 0.' });
+        }
+
+        // Regla de negocio (fechas): el contrato no puede empezar en el pasado
+        // ni terminar antes de empezar. Las fechas llegan como 'YYYY-MM-DD', así
+        // que la comparación lexicográfica equivale a la cronológica. El 'hoy' se
+        // calcula con la zona horaria de la BD (no la del host), para que sea
+        // consistente con GETDATE() en Docker (UTC) y SQL local.
+        const fechaHoy = getFechaActualDB();
+        const inicioStr = String(fecha_inicio ?? '');
+        const finStr = String(fecha_fin ?? '');
+        if (!inicioStr || !finStr) {
+            return res.status(400).json({ message: 'La fecha de inicio y la fecha fin son obligatorias.' });
+        }
+        if (inicioStr < fechaHoy) {
+            return res.status(400).json({ message: 'La fecha de inicio no puede ser anterior a hoy.' });
+        }
+        if (finStr <= inicioStr) {
+            return res.status(400).json({ message: 'La fecha fin debe ser posterior a la fecha de inicio.' });
         }
 
         const pool = await getConnection();
@@ -141,6 +189,15 @@ export const updateContrato = async (req: Request, res: Response) => {
         const montoValido = (v: unknown): boolean => v == null || (Number.isFinite(Number(v)) && Number(v) > 0);
         if (!montoValido(monto_mensual) || !montoValido(monto_deposito)) {
             return res.status(400).json({ message: 'El monto mensual y el monto de depósito deben ser mayores a 0.' });
+        }
+
+        // Regla de negocio (fechas) al EDITAR: la fecha fin no puede ser anterior
+        // ni igual a la fecha de inicio. NO se exige fecha_inicio >= hoy porque un
+        // contrato existente ya puede haber empezado en el pasado.
+        const inicioStr = String(fecha_inicio ?? '');
+        const finStr = String(fecha_fin ?? '');
+        if (inicioStr && finStr && finStr <= inicioStr) {
+            return res.status(400).json({ message: 'La fecha fin debe ser posterior a la fecha de inicio.' });
         }
 
         const pool = await getConnection();

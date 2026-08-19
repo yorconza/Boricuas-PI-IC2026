@@ -1,3 +1,33 @@
+/**
+ * ============================================================================
+ * Archivo: personalController.ts
+ * ============================================================================
+ *
+ * ¿Qué hace?
+ * Controller del módulo de Personal (Admin/Guarda) del panel Admin. CRUD:
+ *
+ *   getPersonal            → sp_Personal_Listar
+ *   createPersonal         → sp_Personal_Insertar (hashea contraseña con bcrypt)
+ *   updatePersonal         → sp_Personal_Actualizar
+ *   deactivatePersonal     → sp_Personal_Desactivar
+ *   reactivatePersonal     → sp_Personal_Reactivar
+ *
+ * Validaciones extra (backend):
+ *   - Correo de contacto duplicado (pre-chequeo antes del SP, mensaje claro).
+ *   - Contraseña hasheada con bcrypt (10 rondas) antes de enviar al SP.
+ *   - Detección de error 2601/2627 (carrera entre pre-chequeo e INSERT).
+ *
+ * Seguridad:
+ *   - Rutas protegidas por JWT + 2FA + sesión + rol Administrador.
+ *   - id_usuario_actual se toma del token (req.user).
+ *
+ * Se comunica con:
+ *   - SQL Server vía confDB.getConnection().
+ *   - Ruta: personalRoute.ts.
+ *   - Frontend: PersonalPage.tsx.
+ *
+ * ============================================================================
+ */
 import { type Request, type Response } from 'express';
 import bcrypt from 'bcrypt';
 import { getConnection } from '../config/confDB.js';

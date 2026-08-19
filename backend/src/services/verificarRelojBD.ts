@@ -21,6 +21,7 @@
  * ============================================================================
  */
 import { getConnection } from '../config/confDB.js';
+import { getTimezoneInfo } from './timezoneService.js';
 
 /** Desfase máximo tolerado (minutos) entre el reloj de la BD y el de Node. */
 const UMBRAL_DESFASE_MIN = 5;
@@ -54,9 +55,13 @@ export const componentesComoLocal = (valor: string | Date): number => {
 export const verificarRelojBD = async (): Promise<void> => {
     try {
         const pool = await getConnection();
-        const res = await pool.request().query('SELECT SYSDATETIME() AS ahora_bd');
+        const res = await pool.request().query('SELECT SYSDATETIME() AS ahora_bd, @@LANGUAGE AS idioma, @@VERSION AS version');
         const valor = res?.recordset?.[0]?.ahora_bd as string | Date | undefined;
         if (valor == null) return;
+
+        // Mostrar info de timezone configurada para diagnóstico
+        console.log(`ℹ️  Zona horaria configurada en el backend: ${getTimezoneInfo()}`);
+        console.log(`ℹ️  SQL Server: ${(res?.recordset?.[0]?.version as string ?? '').split('\n')[0]}`);
 
         const bdLocal = componentesComoLocal(valor);
         if (!Number.isFinite(bdLocal)) return;
@@ -68,6 +73,15 @@ export const verificarRelojBD = async (): Promise<void> => {
                 'Los filtros "de HOY" (visitas, reservas, pagos, historial del día) y las horas de notificaciones ' +
                 'pueden quedar corridos. Corrige la zona horaria/reloj del Windows de SQL Server.'
             );
+            // Desfase de 5-7 horas suele significar que la BD está en UTC y el servidor en America/*
+            if (Math.abs(desfaseMin) >= 300 && Math.abs(desfaseMin) <= 420) {
+                console.warn(
+                    '💡 El desfase de ~6h sugiere que la BD corre en UTC (típico de Docker) ' +
+                    'mientras este servidor usa America/Costa_Rica (UTC-6). ' +
+                    'Solución: Define DB_TIMEZONE=UTC en el .env, o configura la BD con la zona correcta. ' +
+                    'Ver DOCKER.md para más detalles.'
+                );
+            }
         } else {
             console.log(`✅ Reloj de la BD sincronizado con este servidor (desfase ${desfaseMin} min).`);
         }

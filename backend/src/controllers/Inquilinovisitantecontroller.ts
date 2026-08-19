@@ -1,6 +1,35 @@
+/**
+ * ============================================================================
+ * Archivo: Inquilinovisitantecontroller.ts
+ * ============================================================================
+ *
+ * ¿Qué hace?
+ * Controller del módulo de Visitantes para Inquilinos. CRUD completo:
+ *
+ *   registrarVisitante   → sp_RegistrarVisitante (alta de visitante)
+ *   getMisVisitantes     → sp_ListarMisVisitantes (listado con filtro por estado)
+ *   getProximaVisita     → sp_ObtenerMiProximaVisita (tarjeta Dashboard)
+ *   getDetalleVisitante  → sp_ObtenerVisitanteDetalle (modal de detalle)
+ *   cancelarVisitante    → sp_CancelarVisitante (PATCH)
+ *
+ * Nota: hora_esperada llega como "HH:mm" (input type="time" del frontend)
+ * y se combina con la fecha de hoy para formar el DATETIME completo.
+ *
+ * Seguridad:
+ *   - Rutas protegidas por JWT + 2FA + sesión + rol Inquilino.
+ *   - id_usuario_actual se toma de req.user (token firmado).
+ *
+ * Se comunica con:
+ *   - SQL Server vía confDB.getConnection().
+ *   - Ruta: Inquilinovisitanteroute.ts.
+ *   - Frontend: MisVisitantesPage.tsx, RegistrarVisitantePage.tsx → inquilinoService.
+ *
+ * ============================================================================
+ */
 import { type Request, type Response } from 'express';
 import { getConnection } from '../config/confDB.js';
 import sql from 'mssql';
+import { getFechaActualDB } from '../services/timezoneService.js';
 
 // 1. Registrar visitante (sp_RegistrarVisitante)
 // POST /api/inquilino/visitantes
@@ -22,10 +51,10 @@ export const registrarVisitante = async (req: Request, res: Response) => {
 
         let horaEsperadaCompleta: string | null = null;
         if (hora_esperada) {
-            const hoy = new Date();
-
-            const fecha =
-                `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+            // Usa la zona horaria de la BD (no la del host) para construir
+            // la fecha. Esto asegura consistencia con GETDATE()/SYSDATETIME()
+            // en el SP, tanto en SQL local como en Docker (que usa UTC).
+            const fecha = getFechaActualDB();
             horaEsperadaCompleta = `${fecha} ${hora_esperada}:00`;
         }
 

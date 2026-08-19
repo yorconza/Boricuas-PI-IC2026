@@ -1,3 +1,35 @@
+/**
+ * ============================================================================
+ * Archivo: confDB.ts
+ * ============================================================================
+ *
+ * ¿Qué hace?
+ * Centraliza la configuración y conexión a SQL Server (CondominioDB). Exporta
+ * la función `getConnection()` que devuelve un pool compartido (max: 1 conexión
+ * física) para todas las peticiones del backend.
+ *
+ * ¿Por qué pool max:1?
+ * Garantiza que SET CONTEXT_INFO (auditoría del módulo de autenticación)
+ * persista en todas las consultas de la misma petición HTTP. Más de una
+ * conexión crearía carreras de contexto.
+ *
+ * Configuración:
+ *   - Lee variables de entorno DB_* desde .env (con valores por defecto).
+ *   - encrypt: false (desarrollo local), trustServerCertificate: true.
+ *
+ * Se comunica con:
+ *   - SQL Server (CondominioDB) vía el paquete `mssql`.
+ *   - Todo el backend: cualquier controller/service que necesite BD
+ *     llama a getConnection().
+ *
+ * Flujo: *     server.ts / controllers / services
+ *         ↓ getConnection()
+ *     sql.connect(dbSettings) → pool (reutilizado)
+ *         ↓ pool.request().execute('sp_...')
+ *     SQL Server
+ *
+ * ============================================================================
+ */
 import sql from 'mssql';
 import dotenv from 'dotenv';
 

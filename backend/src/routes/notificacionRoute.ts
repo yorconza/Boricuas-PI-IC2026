@@ -8,6 +8,9 @@
  * desde server.ts):
  *
  *   GET   /api/notificaciones               → sp_ListarNotificaciones
+ *   POST  /api/notificaciones               → sp_CrearNotificacion (aviso del
+ *                                             propio usuario, para que las
+ *                                             notis locales no desaparezcan)
  *   PATCH /api/notificaciones/:id/leida     → sp_MarcarNotificacionLeida
  *   PATCH /api/notificaciones/marcar-todas  → sp_MarcarTodasNotificacionesLeidas
  *
@@ -22,6 +25,7 @@
 import { Router } from 'express';
 import {
     getNotificaciones,
+    crearNotificacion,
     marcarLeida,
     marcarTodasLeidas
 } from '../controllers/notificacionController.js';
@@ -41,6 +45,9 @@ const proteger = [
 
 // GET /api/notificaciones?leida=0&limite=20
 notificaciones.get('/', proteger, getNotificaciones);
+
+// POST /api/notificaciones — crea una notificación para el usuario autenticado
+notificaciones.post('/', proteger, crearNotificacion);
 
 // PATCH /api/notificaciones/marcar-todas (se define antes de /:id para evitar
 // que "marcar-todas" se interprete como un id de notificación).

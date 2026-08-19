@@ -157,7 +157,7 @@ export default function GuardiaVisitas() {
     try {
       const res = await guardService.registrarIngreso(id, true);
       const visita = esperadas.find(v => v.id_visitante === id);
-      addNotification('guardia', 'Visita autorizada', `Se autorizó la visita de ${visita?.nombre_completo ?? 'visitante'}`);
+      addNotification('guardia', 'Visita autorizada', `Se autorizó la visita de ${visita?.nombre_completo ?? 'visitante'}`, 'fa-check-circle', id);
       showToast(res.message ?? `Visita de ${visita?.nombre_completo} autorizada correctamente.`, 'success');
       await refrescarListaActual();
     } catch (err) {
@@ -174,7 +174,7 @@ export default function GuardiaVisitas() {
     try {
       const res = await guardService.registrarIngreso(id, false, motivo);
       const visita = esperadas.find(v => v.id_visitante === id);
-      addNotification('guardia', 'Visita rechazada', `Se rechazó la visita de ${visita?.nombre_completo ?? 'visitante'}`);
+      addNotification('guardia', 'Visita rechazada', `Se rechazó la visita de ${visita?.nombre_completo ?? 'visitante'}`, 'fa-times-circle', id);
       showToast(res.message ?? `Visita de ${visita?.nombre_completo} rechazada.`, 'error');
       setRechazoId(null);
       setMotivoRechazo('');

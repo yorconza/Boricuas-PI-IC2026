@@ -10,6 +10,7 @@
  *   getNotificaciones   → sp_ListarNotificaciones
  *   marcarLeida         → sp_MarcarNotificacionLeida
  *   marcarTodasLeidas   → sp_MarcarTodasNotificacionesLeidas
+ *   crearNotificacion   → sp_CrearNotificacion
  *
  * Seguridad:
  *   - Las rutas pasan por authenticateToken + require2FA +
@@ -35,6 +36,7 @@
 import { type Request, type Response } from 'express';
 import sql from 'mssql';
 import { getConnection } from '../config/confDB.js';
+import { limpiarContexto } from '../services/contextoService.js';
 
 /** Reutiliza la pool (conexión) donde el middleware ejecutó SET CONTEXT_INFO. */
 const obtenerPool = async (req: Request) => req.pool ?? await getConnection();
@@ -83,6 +85,11 @@ const fechaLocalSinZ = (valor: unknown): string | null => {
  */
 const eliminarNotificacionesVencidas = async (pool: sql.ConnectionPool): Promise<void> => {
     try {
+        // Acción del SISTEMA (caducidad por paso del tiempo): se limpia el
+        // CONTEXT_INFO para que la bitácora registre "Sistema" y no al usuario
+        // de la petición que disparó la consulta.
+        await limpiarContexto(pool);
+
         await pool.request()
             .input('horas_vida', sql.Int, HORAS_DE_VIDA)
             .query('DELETE FROM Notificacion WHERE fecha_envio < DATEADD(HOUR, -@horas_vida, SYSDATETIME())');
@@ -167,7 +174,46 @@ export const getNotificaciones = async (req: Request, res: Response) => {
 };
 
 /**
- * 2. PATCH /api/notificaciones/:id/leida
+ * 2. POST /api/notificaciones
+ * Crea una notificación para el usuario autenticado (sp_CrearNotificacion).
+ *
+ * ¿Para qué? La campana se recarga desde la BD y reemplaza la lista, así que
+ * los avisos que la UI generaba SOLO en el estado local (p. ej. "Nueva área"
+ * al crear un área) desaparecían a los segundos — la famosa "noti fantasma".
+ * Este endpoint los persiste para que sobrevivan al poll. Best-effort en el
+ * frontend: si falla, el aviso local igual se muestra.
+ *
+ * Body: { tipo (≤30), mensaje (≤500), id_referencia? }
+ * El destinatario (id_usuario) SIEMPRE es el usuario del JWT, nunca del body.
+ */
+export const crearNotificacion = async (req: Request, res: Response) => {
+    try {
+        const idActual = obtenerIdActual(req, res);
+        if (idActual === null) return;
+
+        const { tipo, mensaje, id_referencia } = req.body ?? {};
+        if (!tipo || !mensaje) {
+            return res.status(400).json({ message: 'tipo y mensaje son obligatorios' });
+        }
+
+        const pool = await obtenerPool(req);
+        await pool.request()
+            .input('id_usuario', sql.Int, idActual)
+            .input('tipo', sql.VarChar(30), String(tipo).slice(0, 30))
+            .input('mensaje', sql.VarChar(500), String(mensaje).slice(0, 500))
+            .input('id_referencia', sql.Int, id_referencia != null ? Number(id_referencia) : null)
+            .execute('sp_CrearNotificacion');
+
+        return res.status(201).json({ message: 'Notificación creada correctamente' });
+    } catch (error: unknown) {
+        console.error('Error al crear notificación:', error);
+        const err = error as Error;
+        return res.status(400).json({ message: err.message || 'Error interno del servidor' });
+    }
+};
+
+/**
+ * 3. PATCH /api/notificaciones/:id/leida
  * Marca UNA notificación como leída. El SP valida que la notificación
  * pertenezca al usuario autenticado (@id_usuario).
  */
@@ -197,7 +243,7 @@ export const marcarLeida = async (req: Request, res: Response) => {
 };
 
 /**
- * 3. PATCH /api/notificaciones/marcar-todas
+ * 4. PATCH /api/notificaciones/marcar-todas
  * Marca TODAS las notificaciones del usuario autenticado como leídas.
  */
 export const marcarTodasLeidas = async (req: Request, res: Response) => {

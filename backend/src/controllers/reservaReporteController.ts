@@ -1,3 +1,24 @@
+/**
+ * ============================================================================
+ * Archivo: reservaReporteController.ts
+ * ============================================================================
+ *
+ * ¿Qué hace?
+ * Endpoint para descargar el reporte de reservas en formato PDF.
+ *   GET /api/reporte-reservas/pdf?fechaInicio=YYYY-MM-DD&fechaFin=YYYY-MM-DD
+ *
+ * Flujo:
+ *   1. Extrae fechas del query string.
+ *   2. Llama a obtenerReservasParaReporte() (reservasService.ts).
+ *   3. Genera el PDF con PdfService.generarPdfReservas() y lo envía.
+ *
+ * Se comunica con:
+ *   - reservasService.ts (obtenerReservasParaReporte → sp_ObtenerReporteReservas).
+ *   - pdfService.ts (PdfService.generarPdfReservas).
+ *   - Ruta: reservaReporteRoute.ts.
+ *
+ * ============================================================================
+ */
 import { type Request, type Response } from 'express';
 import { obtenerReservasParaReporte } from '../services/reservasService.js';
 import { PdfService } from '../services/pdfService.js';

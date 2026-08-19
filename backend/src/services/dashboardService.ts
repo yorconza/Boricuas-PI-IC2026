@@ -1,3 +1,27 @@
+/**
+ * ============================================================================
+ * Archivo: dashboardService.ts
+ * ============================================================================
+ *
+ * ¿Qué hace?
+ * Service que consulta sp_Dashboard_ObtenerDatos (4 recordsets en una sola
+ * ejecución) y devuelve el resumen del Dashboard del Administrador:
+ *
+ *   [0] KPIs: reservas_hoy, visitas_registradas, contratos_activos,
+ *             areas_ocupadas, ingresos_del_dia.
+ *   [1] Próximas reservas (TOP 5).
+ *   [2] Alertas (contratos a vencer, pagos pendientes, áreas).
+ *   [3] Actividad reciente de Bitácora (TOP 5).
+ *
+ * El SP valida que el rol sea Administrador; si falla, devuelve dashboard vacío.
+ *
+ * Se comunica con:
+ *   - SQL Server vía confDB.getConnection().
+ *   - Controller: dashboardController.ts.
+ *   - Frontend: AdminDashboard.tsx → DataContext.
+ *
+ * ============================================================================
+ */
 import sql from 'mssql';
 import { getConnection } from '../config/confDB.js';
 

@@ -54,6 +54,7 @@ const TABLAS_LEGIBLES: Record<string, string> = {
   Departamento: 'Departamentos',
   Contrato: 'Contratos',
   AreaComun: 'Áreas comunes',
+  AreaMantenimiento: 'Mantenimiento de áreas',
   Reserva: 'Reservas',
   Pago: 'Pagos',
   Visitante: 'Visitantes',

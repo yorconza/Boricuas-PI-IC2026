@@ -132,23 +132,8 @@ interface ReservaRaw {
   estado_pago?: string;
 }
 
-export interface CrearReservaDTO {
-  id_area: number;
-  fecha: string;
-  hora_inicio: string;
-  hora_fin: string;
-  cantidad_personas: number;
-}
-
-export interface EditarReservaDTO {
-  fecha: string;
-  hora_inicio: string;
-  hora_fin: string;
-  cantidad_personas: number;
-}
-
 // --- Interfaces para el Dashboard ---
-export interface DashboardKPIs {
+interface DashboardKPIs {
   reservas_hoy: number;
   visitas_registradas: number;
   contratos_activos: number;
@@ -156,7 +141,7 @@ export interface DashboardKPIs {
   ingresos_del_dia: number; // antes: ingresos_dia (no coincidía con el backend, siempre daba 0/₡0)
 }
 
-export interface DashboardData {
+interface DashboardData {
   kpis: DashboardKPIs;
   proximasReservas: unknown[];
   alertas: unknown[]; // antes faltaba este campo: se perdía aunque el backend lo mandara
@@ -181,10 +166,8 @@ interface DataContextType {
   areasDisponiblesData: AreaInquilino[];
   recargarAreasDisponibles: () => Promise<void>;
   inquilinoReservasData: Reserva[];
-  setInquilinoReservas: React.Dispatch<React.SetStateAction<Reserva[]>>;
   recargarReservasInquilino: () => Promise<void>;
   inquilinoVisitantesData: Visitante[];
-  setInquilinoVisitantes: React.Dispatch<React.SetStateAction<Visitante[]>>;
   recargarVisitantesInquilino: () => Promise<void>;
   activityLog: ActivityItem[];
   adminNotifications: NotificationItem[];
@@ -199,38 +182,39 @@ interface DataContextType {
   recargarDashboard: () => Promise<void>;
 
   addActivity: (descripcion: string, icono?: string, color?: string) => void;
-  addNotification: (role: UserRole, titulo: string, mensaje: string, icono?: string) => void;
+  /** icono opcional + id_referencia de la entidad relacionada (reserva, área, contrato...). */
+  addNotification: (role: UserRole, titulo: string, mensaje: string, icono?: string, idReferencia?: number | null) => void;
   markAsRead: (role: UserRole, id: number) => void;
   markAllRead: (role: UserRole) => void;
 
-  // Personal CRUD
+  // Personal CRUD (los crear* devuelven el id nuevo para el id_referencia de
+  // la notificación; null si el backend no lo reporta).
   recargarPersonal: () => Promise<void>;
-  crearPersonal: (nombre: string, correo: string, contrasena: string, telefono: string, cedula: string, correoContacto?: string) => Promise<void>;
+  crearPersonal: (nombre: string, correo: string, contrasena: string, telefono: string, cedula: string, correoContacto?: string) => Promise<number | null>;
   editarPersonal: (id_usuario: number, nombre: string, correo: string, telefono: string, cedula: string, correoContacto?: string) => Promise<void>;
   cambiarEstadoPersonal: (id_usuario: number, activar: boolean) => Promise<void>;
 
   // Residentes CRUD
   recargarResidentes: () => Promise<void>;
-  crearResidente: (nombre: string, correo: string, contrasena: string, telefono: string, cedula: string) => Promise<void>;
+  crearResidente: (nombre: string, correo: string, contrasena: string, telefono: string, cedula: string) => Promise<number | null>;
   editarResidente: (id_usuario: number, nombre: string, correo: string, telefono: string, cedula: string) => Promise<void>;
   cambiarEstadoResidente: (id_usuario: number, activar: boolean) => Promise<void>;
 
   // Contratos CRUD
   recargarContratos: () => Promise<void>;
-  crearContrato: (datos: { cedula: string; numero_departamento: string; fecha_inicio: string; fecha_fin: string; monto_mensual: number; monto_deposito: number }) => Promise<void>;
+  crearContrato: (datos: { cedula: string; numero_departamento: string; fecha_inicio: string; fecha_fin: string; monto_mensual: number; monto_deposito: number }) => Promise<number | null>;
   editarContrato: (id_contrato: number, datos: { fecha_inicio: string; fecha_fin: string; monto_mensual: number; monto_deposito: number }) => Promise<void>;
 
   // Departamentos CRUD
   recargarDepartamentos: () => Promise<void>;
-  crearDepartamento: (numero: string, piso: number | null, metrosCuadrados: number | null) => Promise<void>;
+  crearDepartamento: (numero: string, piso: number | null, metrosCuadrados: number | null) => Promise<number | null>;
   editarDepartamento: (id_departamento: number, numero: string, piso: number | null, metrosCuadrados: number | null) => Promise<void>;
   cambiarEstadoDepartamento: (id_departamento: number, activar: boolean) => Promise<void>;
 
-  // Reservas CRUD / Consulta (la cancelación es SOLO del inquilino dueño, vía
-  // MisReservasPage → inquilinoService.cancelarReserva → /api/inquilino/reservas/:id)
+  // Reservas: SOLO CONSULTA para el admin (el panel es de solo lectura).
+  // La creación (sp_CrearReservaPago) y cancelación (sp_CancelarReserva) son
+  // exclusivas del inquilino vía inquilinoService → /api/inquilino/reservas.
   recargarReservas: () => Promise<void>;
-  crearReserva: (dto: CrearReservaDTO) => Promise<void>;
-  editarReserva: (id_reserva: number, dto: EditarReservaDTO) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | null>(null);
@@ -464,8 +448,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [idAdminActual]);
 
   const crearPersonal = useCallback(async (nombre: string, correo: string, contrasena: string, telefono: string, cedula: string, correoContacto?: string) => {
-    await api.post('/personal', { nombre_completo: nombre, correo, correo_contacto: correoContacto || null, contrasena, telefono, cedula, foto_perfil: null });
+    const res = await api.post<{ id_usuario_nuevo?: number | null }>('/personal', { nombre_completo: nombre, correo, correo_contacto: correoContacto || null, contrasena, telefono, cedula, foto_perfil: null });
     await recargarPersonal();
+    return res?.id_usuario_nuevo ?? null;
   }, [recargarPersonal]);
 
   const editarPersonal = useCallback(async (id_usuario: number, nombre: string, correo: string, telefono: string, cedula: string, correoContacto?: string) => {
@@ -508,7 +493,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [idAdminActual]);
 
   const crearResidente = useCallback(async (nombre: string, correo: string, contrasena: string, telefono: string, cedula: string) => {
-    await api.post('/residentes', {
+    const res = await api.post<{ id_usuario_nuevo?: number | null }>('/residentes', {
       nombre_completo: nombre,
       correo,
       contrasena,
@@ -518,6 +503,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     await recargarResidentes();
     await recargarDashboard(); // "Actividad reciente" muestra altas de residentes
+    return res?.id_usuario_nuevo ?? null;
   }, [recargarResidentes, recargarDashboard]);
 
   const editarResidente = useCallback(async (id_usuario: number, nombre: string, correo: string, telefono: string, cedula: string) => {
@@ -604,11 +590,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
     monto_mensual: number;
     monto_deposito: number;
   }) => {
-    await api.post('/contratos', datos);
+    const res = await api.post<{ id_contrato_nuevo?: number | null }>('/contratos', datos);
 
     await recargarContratos();
     await recargarResidentes();
     await recargarDashboard(); // 🔑 antes faltaba: por esto "Contratos activos" no se actualizaba en la tarjeta
+    return res?.id_contrato_nuevo ?? null;
   }, [recargarContratos, recargarResidentes, recargarDashboard]);
 
   const editarContrato = useCallback(async (
@@ -628,9 +615,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [recargarContratos, recargarResidentes, recargarDashboard]);
 
   const crearDepartamento = useCallback(async (numero: string, piso: number | null, metrosCuadrados: number | null) => {
-    await api.post('/departamentos', { numero, piso, metros_cuadrados: metrosCuadrados });
+    const res = await api.post<{ id_departamento_nuevo?: number | null }>('/departamentos', { numero, piso, metros_cuadrados: metrosCuadrados });
 
     await recargarDepartamentos();
+    return res?.id_departamento_nuevo ?? null;
   }, [recargarDepartamentos]);
 
   const editarDepartamento = useCallback(async (id_departamento: number, numero: string, piso: number | null, metrosCuadrados: number | null) => {
@@ -691,23 +679,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
   }, [idAdminActual]);
 
-  const crearReserva = useCallback(async (dto: CrearReservaDTO) => {
-    await api.post('/reservas', dto);
-
-    await recargarReservas();
-    await recargarDashboard(); // afecta reservas_hoy, areas_ocupadas y "Próximas reservas"
-  }, [recargarReservas, recargarDashboard]);
-
-  const editarReserva = useCallback(async (id_reserva: number, dto: EditarReservaDTO) => {
-    await api.put(`/reservas/${id_reserva}`, dto);
-
-    await recargarReservas();
-    await recargarDashboard();
-  }, [recargarReservas, recargarDashboard]);
-
-  // NOTA (cambio): la cancelación de reservas es SOLO del inquilino dueño
-  // (MisReservasPage). Se eliminó el cancelarReserva de admin (apuntaba a
-  // /api/reservas/:id/cancelar, ruta que ya no existe).
+  // NOTA (cambio): el admin no crea ni edita reservas (panel de solo lectura).
+  // Se eliminaron crearReserva (POST /api/reservas → sp_InsertarReserva) y
+  // editarReserva (PUT /api/reservas/:id → sp_ActualizarReserva), ambos sin uso.
+  // La cancelación también es SOLO del inquilino dueño (MisReservasPage).
 
   // --- Carga Inicial ---
   useEffect(() => {
@@ -757,16 +732,41 @@ export function DataProvider({ children }: { children: ReactNode }) {
     });
   }, [idAdminActual]);
 
-  const addNotification = useCallback((role: UserRole, titulo: string, mensaje: string, icono = 'fa-bell') => {
+  /**
+   * Convierte el título de un aviso en un código tipo (ej. "Nueva área" →
+   * "NUEVA_AREA") para persistirlo en la BD. Sin acentos ni espacios, ≤ 30
+   * chars (cabe en Notificacion.tipo).
+   */
+  const tituloATipo = (titulo: string): string => {
+    const tipo = titulo
+      .toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // quitar acentos
+      .replace(/[^a-z0-9]+/g, '_')                        // espacios/símbolos → _
+      .replace(/^_+|_+$/g, '');
+    return (tipo || 'actividad').toUpperCase().slice(0, 30);
+  };
+
+  const addNotification = useCallback((role: UserRole, titulo: string, mensaje: string, icono = 'fa-bell', idReferencia?: number | null) => {
     const now = new Date();
     const newItem: NotificationItem = {
       id: Date.now(), title: titulo, message: mensaje,
       time: now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
-      read: false, icon: icono, timestamp: now.getTime()
+      read: false, icon: icono, timestamp: now.getTime(),
+      id_referencia: idReferencia ?? null,
     };
     if (role === 'admin') setAdminNotifications(prev => [newItem, ...prev]);
     else if (role === 'guardia') setGuardiaNotifications(prev => [newItem, ...prev]);
     else setInquilinoNotifications(prev => [newItem, ...prev]);
+
+    // Persistir en la BD (sp_CrearNotificacion) para que la notificación NO
+    // sea un "fantasma" local: la campana se recarga desde la BD cada 30 s y
+    // reemplaza la lista, así que un aviso solo-local desaparecía al instante.
+    // id_referencia = id de la entidad relacionada (reserva, área, contrato...)
+    // para que quede ligada igual que las notis de los triggers.
+    // Best-effort: si la BD no responde, el aviso local igual se muestra.
+    notificacionesService.crear(tituloATipo(titulo), mensaje, idReferencia ?? null).catch(err => {
+      console.error('Error al persistir notificación:', err);
+    });
   }, []);
 
   const markAsRead = useCallback((role: UserRole, id: number) => {
@@ -802,8 +802,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       departamentosData,
       reservasData: adminReservas,
       areasDisponiblesData, recargarAreasDisponibles,
-      inquilinoReservasData, setInquilinoReservas, recargarReservasInquilino,
-      inquilinoVisitantesData, setInquilinoVisitantes, recargarVisitantesInquilino,
+      inquilinoReservasData, recargarReservasInquilino,
+      inquilinoVisitantesData, recargarVisitantesInquilino,
       activityLog,
       adminNotifications, guardiaNotifications, inquilinoNotifications,
       recargarNotificaciones,
@@ -814,7 +814,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       recargarResidentes, crearResidente, editarResidente, cambiarEstadoResidente,
       recargarContratos, crearContrato, editarContrato,
       recargarDepartamentos, crearDepartamento, editarDepartamento, cambiarEstadoDepartamento,
-      recargarReservas, crearReserva, editarReserva
+      recargarReservas
     }}>
       {children}
     </DataContext.Provider>

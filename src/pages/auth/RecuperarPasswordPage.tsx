@@ -42,7 +42,9 @@ export default function RecuperarPasswordPage() {
   const { showAlert } = useAlert();
 
   const [nuevaContrasena, setNuevaContrasena] = useState('');
+  const [showNuevaContrasena, setShowNuevaContrasena] = useState(false);
   const [confirmarContrasena, setConfirmarContrasena] = useState('');
+  const [showConfirmarContrasena, setShowConfirmarContrasena] = useState(false);
   const [error, setError] = useState('');
   const [enviando, setEnviando] = useState(false);
   // Si el enlace vino sin token, no tiene sentido mostrar el formulario
@@ -106,26 +108,46 @@ export default function RecuperarPasswordPage() {
 
               <div className="input-group">
                 <label htmlFor="nueva-contrasena">NUEVA CONTRASEÑA</label>
-                <input
-                  type="password"
-                  id="nueva-contrasena"
-                  placeholder="Ingresa tu nueva contraseña"
-                  value={nuevaContrasena}
-                  onChange={e => setNuevaContrasena(e.target.value)}
-                  disabled={enviando}
-                />
+                <div className="password-field">
+                  <input
+                    type={showNuevaContrasena ? 'text' : 'password'}
+                    id="nueva-contrasena"
+                    placeholder="Ingresa tu nueva contraseña"
+                    value={nuevaContrasena}
+                    onChange={e => setNuevaContrasena(e.target.value)}
+                    disabled={enviando}
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    aria-label={showNuevaContrasena ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    onClick={() => setShowNuevaContrasena(v => !v)}
+                  >
+                    <i className={`fas ${showNuevaContrasena ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                  </button>
+                </div>
               </div>
 
               <div className="input-group">
                 <label htmlFor="confirmar-contrasena">CONFIRMAR CONTRASEÑA</label>
-                <input
-                  type="password"
-                  id="confirmar-contrasena"
-                  placeholder="Repite tu nueva contraseña"
-                  value={confirmarContrasena}
-                  onChange={e => setConfirmarContrasena(e.target.value)}
-                  disabled={enviando}
-                />
+                <div className="password-field">
+                  <input
+                    type={showConfirmarContrasena ? 'text' : 'password'}
+                    id="confirmar-contrasena"
+                    placeholder="Repite tu nueva contraseña"
+                    value={confirmarContrasena}
+                    onChange={e => setConfirmarContrasena(e.target.value)}
+                    disabled={enviando}
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    aria-label={showConfirmarContrasena ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    onClick={() => setShowConfirmarContrasena(v => !v)}
+                  >
+                    <i className={`fas ${showConfirmarContrasena ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                  </button>
+                </div>
               </div>
 
               <button type="submit" className="login-btn-primary" disabled={enviando}>

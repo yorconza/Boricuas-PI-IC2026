@@ -59,6 +59,74 @@ const formatTime = (time: string | undefined | null): string | null => {
     return time;
 };
 
+/** Ventana de mantenimiento de un área (hora inicio/fin + descripción opcional). */
+interface VentanaMantenimiento {
+    hora_inicio: string;
+    hora_fin: string;
+    descripcion?: string | null;
+}
+
+/**
+ * Parsea el campo `mantenimiento` del body: llega como JSON string (FormData
+ * del formulario de áreas) o como arreglo (request JSON). Valida cada ventana:
+ * horas obligatorias, fin > inicio y dentro del horario del área.
+ */
+const parseMantenimiento = (valor: unknown, horaApertura?: string | null, horaCierre?: string | null): VentanaMantenimiento[] => {
+    if (valor === undefined || valor === null || valor === '') return [];
+
+    let lista: unknown[];
+    if (typeof valor === 'string') {
+        try {
+            lista = JSON.parse(valor);
+        } catch {
+            throw new Error('mantenimiento inválido: debe ser un arreglo JSON.');
+        }
+    } else if (Array.isArray(valor)) {
+        lista = valor;
+    } else {
+        throw new Error('mantenimiento inválido: debe ser un arreglo JSON.');
+    }
+
+    return lista.map((entrada, i) => {
+        const item = (entrada ?? {}) as Record<string, unknown>;
+        const inicio = formatTime(typeof item.hora_inicio === 'string' ? item.hora_inicio : '');
+        const fin = formatTime(typeof item.hora_fin === 'string' ? item.hora_fin : '');
+        const numVentana = i + 1;
+
+        if (!inicio || !fin) {
+            throw new Error(`Ventana de mantenimiento ${numVentana}: la hora de inicio y la hora fin son obligatorias.`);
+        }
+        if (fin <= inicio) {
+            throw new Error(`Ventana de mantenimiento ${numVentana}: la hora fin debe ser posterior a la hora de inicio.`);
+        }
+        if (horaApertura && horaCierre) {
+            const aperturaNorm = formatTime(horaApertura);
+            const cierreNorm = formatTime(horaCierre);
+            if (aperturaNorm && cierreNorm && (inicio < aperturaNorm || fin > cierreNorm)) {
+                throw new Error(`Ventana de mantenimiento ${numVentana}: debe estar dentro del horario del área (${horaApertura} - ${horaCierre}).`);
+            }
+        }
+
+        return {
+            hora_inicio: inicio,
+            hora_fin: fin,
+            descripcion: typeof item.descripcion === 'string' && item.descripcion.trim() ? item.descripcion.trim() : null
+        };
+    });
+};
+
+/** Inserta las ventanas de mantenimiento de un área dentro de la transacción. */
+const insertarMantenimiento = async (transaction: sql.Transaction, idArea: number, ventanas: VentanaMantenimiento[]): Promise<void> => {
+    for (const v of ventanas) {
+        await new sql.Request(transaction)
+            .input('id_area', sql.Int, idArea)
+            .input('hora_inicio', sql.VarChar(8), v.hora_inicio)
+            .input('hora_fin', sql.VarChar(8), v.hora_fin)
+            .input('descripcion', sql.VarChar(100), v.descripcion ?? null)
+            .query('INSERT INTO AreaMantenimiento (id_area, hora_inicio, hora_fin, descripcion) VALUES (@id_area, @hora_inicio, @hora_fin, @descripcion)');
+    }
+};
+
 /**
  * Valida los "magic bytes" del archivo para confirmar que es una imagen REAL
  * (JPEG, PNG, GIF o WEBP) y no solo un archivo con extensión cambiada.
@@ -139,7 +207,32 @@ export const getAreas = async (req: Request, res: Response) => {
             .input('id_usuario_actual', sql.Int, idActual)
             .execute('sp_ListarAreasComunes');
 
-        return res.status(200).json(result.recordset);
+        const areas = result.recordset ?? [];
+
+        // Adjuntar las ventanas de mantenimiento a cada área (tabla
+        // AreaMantenimiento). Si la tabla aún no existe en la BD (script 01
+        // pendiente), se devuelven las áreas sin ventanas para no romper el listado.
+        let ventanasPorArea: Record<number, VentanaMantenimiento[]> = {};
+        try {
+            const mantResult = await pool.request()
+                .query('SELECT id_area, hora_inicio, hora_fin, descripcion FROM AreaMantenimiento');
+            ventanasPorArea = (mantResult.recordset ?? []).reduce((acc, fila) => {
+                const idArea = Number(fila.id_area);
+                (acc[idArea] = acc[idArea] ?? []).push({
+                    hora_inicio: fila.hora_inicio as string,
+                    hora_fin: fila.hora_fin as string,
+                    descripcion: (fila.descripcion as string | null) ?? null
+                });
+                return acc;
+            }, {} as Record<number, VentanaMantenimiento[]>);
+        } catch {
+            // Tabla AreaMantenimiento no existe todavía: áreas sin ventanas.
+        }
+
+        return res.status(200).json(areas.map(a => ({
+            ...a,
+            mantenimiento: ventanasPorArea[Number(a.id_area)] ?? []
+        })));
     } catch (error: unknown) {
         console.error('Error en getAreas:', error);
         if (esErrorDePermisos(error)) {
@@ -208,21 +301,51 @@ export const createArea = async (req: Request, res: Response) => {
         }
 
         const pool = req.pool ?? await getConnection();
-        const result = await pool.request()
-            .input('id_usuario_actual', sql.Int, idActual)
-            .input('nombre', sql.VarChar(100), nombre)
-            .input('capacidad_max', sql.Int, Number(capacidad_max))
-            .input('descripcion', sql.VarChar(500), descripcion)
-            .input('costo_por_hora', sql.Decimal(10, 2), Number(costo_por_hora))
-            .input('hora_apertura', sql.VarChar(8), formatTime(hora_apertura))
-            .input('hora_cierre', sql.VarChar(8), formatTime(hora_cierre))
-            .input('max_reservas_semana', sql.Int, Number(max_reservas_semana))
-            .input('foto_principal', sql.VarChar(255), fotoFinal)
-            .execute('sp_CrearAreaComun');
+
+        // Ventanas de mantenimiento (opcionales): se persisten en la MISMA
+        // transacción que el alta del área (si fallan, el área se revierte).
+        const ventanas = parseMantenimiento(req.body.mantenimiento, formatTime(hora_apertura), formatTime(hora_cierre));
+
+        const transaction = new sql.Transaction(pool);
+        await transaction.begin();
+        let nuevoId: number | null = null;
+        try {
+            const result = await new sql.Request(transaction)
+                .input('id_usuario_actual', sql.Int, idActual)
+                .input('nombre', sql.VarChar(100), nombre)
+                .input('capacidad_max', sql.Int, Number(capacidad_max))
+                .input('descripcion', sql.VarChar(500), descripcion)
+                .input('costo_por_hora', sql.Decimal(10, 2), Number(costo_por_hora))
+                .input('hora_apertura', sql.VarChar(8), formatTime(hora_apertura))
+                .input('hora_cierre', sql.VarChar(8), formatTime(hora_cierre))
+                .input('max_reservas_semana', sql.Int, Number(max_reservas_semana))
+                .input('foto_principal', sql.VarChar(255), fotoFinal)
+                .execute('sp_CrearAreaComun');
+
+            // El SP suele devolver el id como id_area_creada, pero por robustez
+            // (algunas instancias lo devuelven con otro nombre o por OUTPUT/
+            // RETURN) si no viene en el recordset se busca por el nombre ÚNICO
+            // del área dentro de la MISMA transacción.
+            nuevoId = Number(result.recordset?.[0]?.id_area_creada) || null;
+            if (nuevoId == null) {
+                const buscarId = await new sql.Request(transaction)
+                    .input('nombre', sql.VarChar(100), nombre)
+                    .query('SELECT TOP 1 id_area FROM AreaComun WHERE nombre = @nombre');
+                nuevoId = Number(buscarId.recordset?.[0]?.id_area) || null;
+            }
+
+            if (nuevoId != null && ventanas.length > 0) {
+                await insertarMantenimiento(transaction, nuevoId, ventanas);
+            }
+            await transaction.commit();
+        } catch (error) {
+            await transaction.rollback().catch(() => undefined);
+            throw error;
+        }
 
         return res.status(201).json({
             message: 'Área creada correctamente',
-            id_area: result.recordset[0]?.id_area_creada || null
+            id_area: nuevoId
         });
     } catch (error: unknown) {
         console.error('Error en createArea:', error);
@@ -318,18 +441,43 @@ export const updateArea = async (req: Request, res: Response) => {
             }
         }
 
-        await pool.request()
-            .input('id_usuario_actual', sql.Int, idActual)
-            .input('id_area', sql.Int, Number(id))
-            .input('nombre', sql.VarChar(100), nombre)
-            .input('capacidad_max', sql.Int, Number(capacidad_max))
-            .input('descripcion', sql.VarChar(500), descripcion)
-            .input('costo_por_hora', sql.Decimal(10, 2), Number(costo_por_hora))
-            .input('hora_apertura', sql.VarChar(8), formatTime(hora_apertura))
-            .input('hora_cierre', sql.VarChar(8), formatTime(hora_cierre))
-            .input('max_reservas_semana', sql.Int, Number(max_reservas_semana))
-            .input('foto_principal', sql.VarChar(255), fotoFinal)
-            .execute('sp_ActualizarAreaComun');
+        // Ventanas de mantenimiento: si el campo viene presente (incluido []),
+        // se reemplazan TODAS las del área; si no viene, se conservan las actuales.
+        const tieneCampoMantenimiento = req.body.mantenimiento !== undefined && req.body.mantenimiento !== null && req.body.mantenimiento !== '';
+        const ventanas = tieneCampoMantenimiento
+            ? parseMantenimiento(req.body.mantenimiento, formatTime(hora_apertura), formatTime(hora_cierre))
+            : null;
+
+        // La actualización del área + reemplazo de ventanas en UNA transacción.
+        const transaction = new sql.Transaction(pool);
+        await transaction.begin();
+        try {
+            await new sql.Request(transaction)
+                .input('id_usuario_actual', sql.Int, idActual)
+                .input('id_area', sql.Int, Number(id))
+                .input('nombre', sql.VarChar(100), nombre)
+                .input('capacidad_max', sql.Int, Number(capacidad_max))
+                .input('descripcion', sql.VarChar(500), descripcion)
+                .input('costo_por_hora', sql.Decimal(10, 2), Number(costo_por_hora))
+                .input('hora_apertura', sql.VarChar(8), formatTime(hora_apertura))
+                .input('hora_cierre', sql.VarChar(8), formatTime(hora_cierre))
+                .input('max_reservas_semana', sql.Int, Number(max_reservas_semana))
+                .input('foto_principal', sql.VarChar(255), fotoFinal)
+                .execute('sp_ActualizarAreaComun');
+
+            if (ventanas !== null) {
+                await new sql.Request(transaction)
+                    .input('id_area', sql.Int, Number(id))
+                    .query('DELETE FROM AreaMantenimiento WHERE id_area = @id_area');
+                if (ventanas.length > 0) {
+                    await insertarMantenimiento(transaction, Number(id), ventanas);
+                }
+            }
+            await transaction.commit();
+        } catch (error) {
+            await transaction.rollback().catch(() => undefined);
+            throw error;
+        }
 
         // 3. Recién tras el éxito: borrar la imagen anterior si cambió/desapareció
         if (fotoAnterior && fotoAnterior !== fotoFinal) {

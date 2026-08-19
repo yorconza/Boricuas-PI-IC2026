@@ -1155,3 +1155,97 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* ============================================================
+   VENTANAS DE MANTENIMIENTO (Drawer Nueva/Editar Área — áreas comunes)
+   Cada ventana es una fila [inicio] a [fin] + descripción + botón quitar.
+   La lista va dentro de una tarjeta para separarla del texto de ayuda y
+   agrupar visualmente las filas dinámicas.
+   ============================================================ */
+.mantenimiento-lista {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: var(--space-3) 0 var(--space-4);
+    padding: var(--space-3);
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+}
+
+.mantenimiento-fila {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.mantenimiento-fila select,
+.mantenimiento-fila input[type="text"] {
+    padding: var(--space-2);
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    font-family: inherit;
+    transition: border var(--transition-fast), box-shadow var(--transition-fast),
+        background var(--transition-smooth), color var(--transition-smooth);
+}
+
+.mantenimiento-fila select {
+    width: 110px;
+    flex-shrink: 0;
+}
+
+.mantenimiento-fila input[type="text"] {
+    flex: 1;
+    min-width: 0;
+}
+
+.mantenimiento-fila input:focus {
+    border-color: var(--accent);
+    box-shadow: var(--shadow-input-focus);
+    outline: none;
+}
+
+.mantenimiento-fila .btn-quitar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    padding: 0;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background var(--transition-fast), color var(--transition-fast),
+        border-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.mantenimiento-fila .btn-quitar:hover {
+    background: rgba(239, 95, 103, 0.1);
+    border-color: var(--error);
+    color: var(--error);
+}
+
+.mantenimiento-fila .btn-quitar:focus-visible {
+    outline: 3px solid rgba(239, 95, 103, 0.3);
+    outline-offset: 2px;
+}
+
+.mantenimiento-agregar {
+    margin-top: var(--space-1);
+}
+
+@media (max-width: 480px) {
+    .mantenimiento-fila {
+        flex-wrap: wrap;
+    }
+    .mantenimiento-fila input[type="text"] {
+        flex-basis: 100%;
+    }
+}

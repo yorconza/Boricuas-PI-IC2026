@@ -1,3 +1,26 @@
+/**
+ * ============================================================================
+ * Archivo: Inquilinoreservaroute.ts
+ * ============================================================================
+ *
+ * ¿Qué hace?
+ * Define las rutas de Reservas para Inquilinos (montadas en /api/inquilino/reservas
+ * desde server.ts):
+ *
+ *   GET    /api/inquilino/reservas/proxima  → sp_ObtenerMiProximaReserva
+ *   GET    /api/inquilino/reservas          → sp_ListarMisReservas
+ *   GET    /api/inquilino/reservas/:id      → sp_ObtenerReservaDetalle
+ *   POST   /api/inquilino/reservas          → sp_CrearReservaPago
+ *   PATCH  /api/inquilino/reservas/:id      → sp_CancelarReserva
+ *
+ * Protección: JWT → 2FA → sesión + SET CONTEXT_INFO → rol Inquilino.
+ *
+ * Se comunica con:
+ *   - Inquilinoreservacontroller.ts (handler de cada ruta).
+ *   - server.ts (montaje en /api/inquilino/reservas).
+ *
+ * ============================================================================
+ */
 import { Router } from 'express';
 import {crearReserva,getMisReservas,getProximaReserva,getDetalleReserva,updateReserva} from '../controllers/Inquilinoreservacontroller.js';
 

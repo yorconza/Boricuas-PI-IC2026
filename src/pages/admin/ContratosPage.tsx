@@ -9,6 +9,7 @@ import PageHeader from '../../components/PageHeader';
 import Drawer from '../../components/Drawer';
 import { useAlert } from '../../components/Alert';
 import { useData } from '../../context/DataContext';
+import { getLocalDateString } from '../../hooks/useLocalDate';
 import { formatearCedula, validarCedula, formatearMoneda } from '../../utils/formatters';
 import type { Contrato } from '../../types';
 
@@ -37,6 +38,11 @@ export default function ContratosPage() {
   const [montoMensual, setMontoMensual] = useState<number>(0);
   const [montoDeposito, setMontoDeposito] = useState<number>(0);
   const [cargando, setCargando] = useState(false);
+
+  // "Hoy" en hora LOCAL (YYYY-MM-DD): el mínimo permitido para las fechas del
+  // contrato. Se usa getLocalDateString (no toISOString) para no desplazar el
+  // día por la zona horaria UTC.
+  const hoy = getLocalDateString();
 
   // Auxiliar para obtener propiedades opcionales o con distintos nombres de la interfaz
   // (compatibilidad forma API vs forma UI). El uso de `any` aquí es intencional:
@@ -94,9 +100,21 @@ export default function ContratosPage() {
       return;
     }
 
+    // Regla de negocio (fechas): el contrato no puede empezar en el pasado
+    // (las fechas vienen como "YYYY-MM-DD", así que la comparación lexicográfica
+    // equivale a la cronológica).
+    if (fechaInicio < hoy) {
+      showAlert('La fecha de inicio no puede ser anterior a hoy.');
+      return;
+    }
+    if (fechaFin <= fechaInicio) {
+      showAlert('La fecha fin debe ser posterior a la fecha de inicio.');
+      return;
+    }
+
     try {
       setCargando(true);
-      await crearContrato({
+      const nuevoId = await crearContrato({
         cedula,
         numero_departamento: numeroDepartamento,
         fecha_inicio: fechaInicio,
@@ -106,7 +124,7 @@ export default function ContratosPage() {
       });
 
       addActivity(`Nuevo contrato registrado`, 'fa-file-signature', 'var(--accent)');
-      addNotification('admin', 'Nuevo contrato', `Se registró exitosamente un contrato.`, 'fa-file-signature');
+      addNotification('admin', 'Nuevo contrato', `Se registró exitosamente un contrato.`, 'fa-file-signature', nuevoId);
 
       setDrawerOpen(false);
       showAlert('Contrato creado correctamente.');
@@ -129,6 +147,14 @@ export default function ContratosPage() {
       return;
     }
 
+    // Regla de negocio (fechas) al EDITAR: la fecha fin no puede ser anterior
+    // ni igual a la fecha de inicio. NO se exige fecha_inicio >= hoy porque un
+    // contrato existente ya puede haber empezado en el pasado.
+    if (fechaFin && fechaInicio && fechaFin <= fechaInicio) {
+      showAlert('La fecha fin debe ser posterior a la fecha de inicio.');
+      return;
+    }
+
     try {
       setCargando(true);
       await editarContrato(contractId, {
@@ -139,7 +165,7 @@ export default function ContratosPage() {
       });
 
       addActivity(`Contrato #${contractId} actualizado`, 'fa-edit', 'var(--accent)');
-      addNotification('admin', 'Contrato editado', `Se actualizó la información del contrato.`, 'fa-edit');
+      addNotification('admin', 'Contrato editado', `Se actualizó la información del contrato.`, 'fa-edit', contractId);
 
       setDrawerOpen(false);
       showAlert('Contrato actualizado correctamente.');
@@ -267,6 +293,7 @@ export default function ContratosPage() {
             <input 
               type="date" 
               value={fechaInicio} 
+              min={drawerMode === 'create' ? hoy : undefined}
               onChange={e => setFechaInicio(e.target.value)} 
             />
           </div>
@@ -275,6 +302,7 @@ export default function ContratosPage() {
             <input 
               type="date" 
               value={fechaFin} 
+              min={fechaInicio || hoy}
               onChange={e => setFechaFin(e.target.value)} 
             />
           </div>

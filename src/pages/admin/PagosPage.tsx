@@ -26,7 +26,7 @@ import PageHeader from '../../components/PageHeader';
 import Drawer from '../../components/Drawer';
 import { useToast } from '../../components/Toast';
 import { useData } from '../../context/DataContext';
-import { toDateOnly, toTimeOnly } from '../../hooks/useLocalDate';
+import { toDateOnly, toTimeOnly, getLocalDateString } from '../../hooks/useLocalDate';
 import { formatearMoneda } from '../../utils/formatters';
 import {
   pagosService,
@@ -266,7 +266,12 @@ export default function PagosPage() {
 
   const exportarPdf = async () => {
     try {
-      await pagosService.descargarReportePdf(filtros.fechaInicio || undefined, filtros.fechaFin || undefined);
+      // Por defecto el PDF es SOLO de los pagos de HOY (fecha local, no UTC);
+      // si el admin seleccionó un rango de fechas en los filtros, se respeta.
+      const hoy = getLocalDateString();
+      const inicio = filtros.fechaInicio || hoy;
+      const fin = filtros.fechaFin || hoy;
+      await pagosService.descargarReportePdf(inicio, fin);
       addActivity('Reporte de pagos exportado (PDF)', 'fa-file-pdf', 'var(--accent)');
       showToast('Reporte PDF generado.', 'success');
     } catch (err: unknown) {
@@ -278,7 +283,7 @@ export default function PagosPage() {
   return (
     <>
       <PageHeader title="Gestión de Pagos">
-        <button className="btn-secondary" onClick={() => void exportarPdf()} title="Exportar reporte en PDF (respeta el rango de fechas)">
+        <button className="btn-secondary" onClick={() => void exportarPdf()} title="Exporta en PDF los pagos de hoy (o el rango de fechas seleccionado en los filtros)">
           <i className="fas fa-file-pdf"></i> Exportar PDF
         </button>
         <button className="btn-primary" onClick={abrirManual}>

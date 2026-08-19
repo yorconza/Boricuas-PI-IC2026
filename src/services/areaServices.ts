@@ -19,6 +19,13 @@
  */
 import { api, ApiError, API_URL, TOKEN_KEY, USUARIO_KEY, buildStaticUrl } from './apiClient';
 
+/** Ventana de mantenimiento de un área (hora inicio/fin + descripción opcional). */
+export interface VentanaMantenimiento {
+  hora_inicio: string;
+  hora_fin: string;
+  descripcion?: string | null;
+}
+
 export interface AreaComun {
   id_area?: number;
   nombre: string;
@@ -30,6 +37,8 @@ export interface AreaComun {
   max_reservas_semana?: number;
   foto_principal?: string | null;
   estado?: string;
+  /** Ventanas de mantenimiento del área (GET /api/areas las adjunta). */
+  mantenimiento?: VentanaMantenimiento[];
 }
 
 /**
