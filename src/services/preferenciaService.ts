@@ -1,3 +1,24 @@
+/**
+ * ============================================================================
+ * Archivo: preferenciaService.ts
+ * ============================================================================
+ *
+ * ¿Qué hace?
+ * Service layer del módulo de Preferencias en el frontend. Gestiona la
+ * lectura y actualización de las preferencias del usuario (tema, idioma,
+ * fuente, tamaño de fuente):
+ *
+ *   obtenerPreferencias     → GET /api/preferencias
+ *   actualizarPreferencias  → PATCH /api/preferencias (parcial)
+ *
+ * Se comunica con:
+ *   - Backend: /api/preferencias (preferenciaController → sp_ObtenerPreferencias /
+ *     sp_ActualizarPreferencias).
+ *   - Consumido por: PreferenciasContext.tsx (proveedor de tema/idioma global).
+ *   - apiClient.ts (wrapper de fetch con JWT automático).
+ *
+ * ============================================================================
+ */
 import { api } from './apiClient';
 
 /** Respuesta cruda de GET /api/preferencias (sp_ObtenerPreferencias) */

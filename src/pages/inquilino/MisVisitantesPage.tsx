@@ -124,7 +124,7 @@ export default function MisVisitantesPage() {
       await recargarVisitantesInquilino();
 
       showToast('Visita cancelada correctamente.', 'success');
-      addNotification('inquilino', 'Visita cancelada', `Cancelaste la visita de ${visitante.nombre}.`);
+      addNotification('inquilino', 'Visita cancelada', `Cancelaste la visita de ${visitante.nombre}.`, 'fa-ban', visitante.id);
     } catch (error: unknown) {
       const err = error as Error;
       showToast(err.message || 'No se pudo cancelar la visita.', 'error');

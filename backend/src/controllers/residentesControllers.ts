@@ -1,3 +1,32 @@
+/**
+ * ============================================================================
+ * Archivo: residentesControllers.ts
+ * ============================================================================
+ *
+ * ¿Qué hace?
+ * Controller del módulo de Residentes (panel Admin). CRUD completo:
+ *
+ *   getResidentes           → sp_Residente_Listar (filtros: nombre, depto, estado)
+ *   createResidente         → sp_Residente_Insertar (hashea contraseña con bcrypt)
+ *   updateResidente         → sp_Residente_Actualizar
+ *   changeEstadoResidente   → sp_Residente_CambiarEstado (desactivar/reactivar)
+ *
+ * Auto-finalización de contratos:
+ *   - Antes de listar, finalizarContratosVencidos() actualiza los contratos
+ *     vencidos para que el listado refleje el estado real.
+ *
+ * Seguridad:
+ *   - Rutas protegidas por JWT + 2FA + sesión + rol Administrador.
+ *   - id_usuario_actual se toma del token (req.user).
+ *
+ * Se comunica con:
+ *   - SQL Server vía confDB.getConnection().
+ *   - contratoService.ts (finalizarContratosVencidos).
+ *   - Ruta: residenteRoute.ts.
+ *   - Frontend: ResidentesPage.tsx.
+ *
+ * ============================================================================
+ */
 import { type Request, type Response } from 'express';
 import bcrypt from 'bcrypt';
 import { getConnection } from '../config/confDB.js';

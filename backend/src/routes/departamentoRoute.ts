@@ -1,3 +1,26 @@
+/**
+ * ============================================================================
+ * Archivo: departamentoRoute.ts
+ * ============================================================================
+ *
+ * ¿Qué hace?
+ * Define las rutas del módulo de Departamentos (montadas en /api/departamentos
+ * desde server.ts):
+ *
+ *   GET    /api/departamentos             → sp_Departamento_Listar
+ *   POST   /api/departamentos             → sp_Departamento_Insertar
+ *   PUT    /api/departamentos/:id         → sp_Departamento_Actualizar
+ *   PATCH  /api/departamentos/:id/desactivar → sp_Departamento_CambiarEstado
+ *   PATCH  /api/departamentos/:id/reactivar  → sp_Departamento_CambiarEstado
+ *
+ * Protección: JWT → 2FA → sesión + SET CONTEXT_INFO → rol Administrador.
+ *
+ * Se comunica con:
+ *   - departamentoController.ts (handler de cada ruta).
+ *   - server.ts (montaje en /api/departamentos).
+ *
+ * ============================================================================
+ */
 import { Router } from 'express';
 import {
     getDepartamentos,

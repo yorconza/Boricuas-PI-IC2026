@@ -9,6 +9,7 @@
  */
 import sql from 'mssql';
 import { getConnection } from '../config/confDB.js';
+import { limpiarContexto, fijarContextoUsuario } from './contextoService.js';
 
 /**
  * Ejecuta sp_Contrato_AutoFinalizar: marca como 'Finalizado' los contratos
@@ -20,6 +21,10 @@ export const finalizarContratosVencidos = async (
 ): Promise<number> => {
     if (!pool || !idUsuarioActual) return 0;
     try {
+        // Acción del SISTEMA (vencimiento por paso del tiempo): se limpia el
+        // CONTEXT_INFO para que la bitácora registre "Sistema" y no al usuario
+        // de la petición; luego se restaura el contexto del usuario.
+        await limpiarContexto(pool);
         const result = await pool.request()
             .input('id_usuario_actual', sql.Int, idUsuarioActual)
             .execute('sp_Contrato_AutoFinalizar');
@@ -27,6 +32,9 @@ export const finalizarContratosVencidos = async (
     } catch (err) {
         console.error('Error al auto-finalizar contratos vencidos:', err);
         return 0;
+    } finally {
+        // Restaurar el contexto del usuario autenticado (best-effort).
+        await fijarContextoUsuario(pool, idUsuarioActual);
     }
 };
 

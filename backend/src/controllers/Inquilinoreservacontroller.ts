@@ -1,3 +1,39 @@
+/**
+ * ============================================================================
+ * Archivo: Inquilinoreservacontroller.ts
+ * ============================================================================
+ *
+ * ¿Qué hace?
+ * Controller del módulo de Reservas para Inquilinos. CRUD completo:
+ *
+ *   crearReserva         → sp_CrearReservaPago (crea reserva + pago simulado)
+ *   getMisReservas       → sp_ListarMisReservas (listado con filtro por estado)
+ *   getProximaReserva    → sp_ObtenerMiProximaReserva (tarjeta Dashboard)
+ *   getDetalleReserva    → sp_ObtenerReservaDetalle (modal de detalle)
+ *   updateReserva        → sp_CancelarReserva (PATCH, cancelación)
+ *
+ * Flujo de creación:
+ *   1. Frontend envía { id_area, fecha, hora_inicio, hora_fin, cantidad_personas, metodo_pago }.
+ *   2. El SP calcula el monto (duración × costo_por_hora), crea la reserva
+ *      con estado "Confirmada" y el pago asociado.
+ *   3. Devuelve { id_reserva, monto_pagado }.
+ *
+ * Auto-finalización (lazy):
+ *   - Antes de listar, sp_FinalizarReservasVencidas actualiza las reservas
+ *     cuya hora fin ya pasó a estado "Finalizada".
+ *
+ * Seguridad:
+ *   - Rutas protegidas por JWT + 2FA + sesión + rol Inquilino.
+ *   - id_usuario_actual se toma de req.user (token firmado).
+ *
+ * Se comunica con:
+ *   - SQL Server vía confDB.getConnection().
+ *   - reservaService.ts (finalizarReservasVencidas).
+ *   - Ruta: Inquilinoreservaroute.ts.
+ *   - Frontend: MisReservasPage.tsx, NuevaReservaPage.tsx → inquilinoService.
+ *
+ * ============================================================================
+ */
 import { type Request, type Response } from 'express';
 import { getConnection } from '../config/confDB.js';
 import sql from 'mssql';
@@ -86,7 +122,7 @@ export const getMisReservas = async (req: Request, res: Response) => {
         // Auto-finalización (lazy): antes de listar, las reservas cuya hora fin
         // ya pasó pasan a 'Finalizada' (sp_FinalizarReservasVencidas), para que
         // "Mis Reservas" muestre el estado real.
-        await finalizarReservasVencidas(pool);
+        await finalizarReservasVencidas(pool, Number(id_usuario_actual));
 
         const result = await pool?.request()
             .input('id_usuario_actual', sql.Int, Number(id_usuario_actual))
@@ -114,7 +150,7 @@ export const getProximaReserva = async (req: Request, res: Response) => {
 
         // Auto-finalización (lazy): la próxima reserva no debe ser una que ya
         // terminó, así que primero se finalizan las vencidas.
-        await finalizarReservasVencidas(pool);
+        await finalizarReservasVencidas(pool, Number(id_usuario_actual));
 
         const result = await pool?.request()
             .input('id_usuario_actual', sql.Int, Number(id_usuario_actual))

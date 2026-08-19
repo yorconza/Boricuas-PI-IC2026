@@ -136,7 +136,7 @@ export default function MisContratosPage() {
 
       setContratoPago(null);
       showToast(`Pago de la mensualidad (${formatearMoneda(montoPago)} con ${metodoTexto}) registrado correctamente.`, 'success');
-      addNotification('inquilino', 'Pago de mensualidad', `Pagaste la mensualidad del contrato ${contratoPago.departamento} por ${formatearMoneda(montoPago)}.`, 'fa-credit-card');
+      addNotification('inquilino', 'Pago de mensualidad', `Pagaste la mensualidad del contrato ${contratoPago.departamento} por ${formatearMoneda(montoPago)}.`, 'fa-credit-card', contratoPago.id_contrato);
       await cargarContratos();
     } catch (err: unknown) {
       const e = err as Error;

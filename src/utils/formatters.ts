@@ -49,18 +49,63 @@ export const validarTelefono = (valor: string): string | null => {
   if (!/^\d{4}-\d{4}$/.test(limpio)) {
     return 'El teléfono debe tener el formato 7777-7777 (8 dígitos).';
   }
+  if (limpio === '0000-0000') {
+    return 'El teléfono no puede ser 0000-0000.';
+  }
   return null;
 };
 
 /**
  * Valida una cédula con el formato #-###-##### (9 dígitos en total).
+ * El primer dígito debe estar entre 1 y 7 (las cédulas costarricenses válidas
+ * no empiezan con 0, 8 ni 9).
  * Devuelve un mensaje de error legible o null si es válida (o está vacía).
  */
 export const validarCedula = (valor: string): string | null => {
   const limpio = valor.trim();
   if (!limpio) return null; // opcional: vacío no es error
-  if (!/^\d-\d{4}-\d{4}$/.test(limpio)) {
-    return 'La cédula debe tener el formato 1-2345-6789 (9 dígitos).';
+  if (!/^[1-7]-\d{4}-\d{4}$/.test(limpio)) {
+    return 'La cédula debe tener el formato 1-2345-6789 y comenzar con un dígito válido (1-7).';
+  }
+  return null;
+};
+
+/**
+ * Formatea una placa de vehículo a formato costarricense de carro:
+ * ABC123 → ABC-123 (3 letras + 3 números, máximo 6 caracteres).
+ */
+export const formatearPlaca = (valor: string): string => {
+  const limpio = valor.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+  if (limpio.length <= 3) return limpio;
+  return `${limpio.slice(0, 3)}-${limpio.slice(3)}`;
+};
+
+/**
+ * Valida una placa con el formato ABC-123 (3 letras + 3 números).
+ * Devuelve un mensaje de error legible o null si es válida (o está vacía).
+ */
+export const validarPlaca = (valor: string): string | null => {
+  const limpio = valor.trim().toUpperCase();
+  if (!limpio) return null; // opcional: vacío no es error
+  if (!/^[A-Z]{3}-\d{3}$/.test(limpio)) {
+    return 'La placa debe tener el formato ABC-123 (3 letras + 3 números).';
+  }
+  return null;
+};
+
+/** Dominios de correo públicos permitidos (gmail, hotmail, outlook, yahoo). */
+export const DOMINIOS_PERMITIDOS = ['gmail.com', 'hotmail.com', 'outlook.com', 'yahoo.com'] as const;
+
+/**
+ * Valida que el dominio del correo esté en la lista permitida.
+ * Devuelve un mensaje de error legible o null si es válido (o está vacío).
+ */
+export const validarCorreoDominio = (correo: string): string | null => {
+  const limpio = correo.trim().toLowerCase();
+  if (!limpio) return null;
+  const dominio = limpio.split('@')[1];
+  if (!dominio || !(DOMINIOS_PERMITIDOS as readonly string[]).includes(dominio)) {
+    return 'Solo se permiten correos con dominio público (gmail.com, hotmail.com, outlook.com, yahoo.com).';
   }
   return null;
 };

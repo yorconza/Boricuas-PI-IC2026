@@ -33,7 +33,7 @@ import Drawer from '../../components/Drawer';
 import Modal from '../../components/Modal';
 import { useData } from '../../context/DataContext';
 import { useAlert } from '../../components/Alert';
-import { formatearTelefono, formatearCedula, validarTelefono, validarCedula } from '../../utils/formatters';
+import { formatearTelefono, formatearCedula, validarTelefono, validarCedula, validarCorreoDominio } from '../../utils/formatters';
 import type { Personal } from '../../types';
 
 export default function PersonalPage() {
@@ -107,6 +107,20 @@ export default function PersonalPage() {
               showAlert(errorCedula);
               return;
           }
+          // El nombre no puede ser solo números
+          if (!/[a-zA-ZáéíóúñÑ]/.test(form.nombre.trim())) {
+              showAlert('El nombre debe contener letras (no solo números).');
+              return;
+          }
+          // El correo de contacto (2FA) es opcional, pero si se escribe debe
+          // tener un dominio público real (gmail/hotmail/outlook/yahoo).
+          if (form.correoContacto.trim()) {
+              const errorCorreoContacto = validarCorreoDominio(form.correoContacto);
+              if (errorCorreoContacto) {
+                  showAlert(errorCorreoContacto);
+                  return;
+              }
+          }
       }
 
       try {
@@ -115,9 +129,9 @@ export default function PersonalPage() {
                   showAlert('Ingrese una contraseña para el nuevo empleado.');
                   return;
               }
-              await crearPersonal(form.nombre, form.correo, form.contrasena, form.telefono, form.cedula, form.correoContacto);
+              const nuevoId = await crearPersonal(form.nombre, form.correo, form.contrasena, form.telefono, form.cedula, form.correoContacto);
               addActivity(`Nuevo empleado registrado: <strong>${form.nombre}</strong>`, 'fa-user-plus', 'var(--success)');
-              addNotification('admin', 'Nuevo empleado', `Se registró a ${form.nombre} como empleado.`, 'fa-user-plus');
+              addNotification('admin', 'Nuevo empleado', `Se registró a ${form.nombre} como empleado.`, 'fa-user-plus', nuevoId);
           } else if (drawerMode === 'edit' && selectedItem) {
               await editarPersonal(selectedItem.id_usuario, form.nombre, form.correo, form.telefono, form.cedula, form.correoContacto);
               // NOTA (cambio): el select de Estado del formulario ahora sí se aplica.
@@ -127,7 +141,7 @@ export default function PersonalPage() {
                   await cambiarEstadoPersonal(selectedItem.id_usuario, form.estado === 'Activo');
               }
               addActivity(`Empleado editado: <strong>${form.nombre}</strong>`, 'fa-edit', 'var(--accent)');
-              addNotification('admin', 'Empleado editado', `Se actualizó la información de ${form.nombre}.`, 'fa-edit');
+              addNotification('admin', 'Empleado editado', `Se actualizó la información de ${form.nombre}.`, 'fa-edit', selectedItem.id_usuario);
           }
 
           setDrawerOpen(false);
@@ -149,10 +163,10 @@ export default function PersonalPage() {
 
           if (!activar) {
               addActivity(`Empleado deshabilitado: <strong>${deleteItem.nombre}</strong>`, 'fa-user-slash', 'var(--warning)');
-              addNotification('admin', 'Empleado deshabilitado', `${deleteItem.nombre} ha sido deshabilitado.`, 'fa-user-slash');
+              addNotification('admin', 'Empleado deshabilitado', `${deleteItem.nombre} ha sido deshabilitado.`, 'fa-user-slash', deleteItem.id_usuario);
           } else {
               addActivity(`Empleado habilitado: <strong>${deleteItem.nombre}</strong>`, 'fa-user-check', 'var(--success)');
-              addNotification('admin', 'Empleado habilitado', `${deleteItem.nombre} ha sido habilitado.`, 'fa-user-check');
+              addNotification('admin', 'Empleado habilitado', `${deleteItem.nombre} ha sido habilitado.`, 'fa-user-check', deleteItem.id_usuario);
           }
       } catch (error: unknown) {
           const err = error as Error;

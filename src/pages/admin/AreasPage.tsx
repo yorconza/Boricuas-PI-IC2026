@@ -31,11 +31,11 @@ import Drawer from '../../components/Drawer';
 import Modal from '../../components/Modal';
 import { useData } from '../../context/DataContext';
 import { useAlert } from '../../components/Alert';
-import { formatHora, toTimeOnly } from '../../hooks/useLocalDate';
+import { formatHora, formatHoraAMPM, toTimeOnly } from '../../hooks/useLocalDate';
 import { formatearMoneda } from '../../utils/formatters';
 import {
   getAreas, createArea, updateArea, toggleEstadoArea,
-  buildAreaImageUrl, type AreaComun
+  buildAreaImageUrl, type AreaComun, type VentanaMantenimiento
 } from '../../services/areaServices';
 
 const IMAGEN_PLACEHOLDER = '/img/area-placeholder.svg';
@@ -51,6 +51,8 @@ interface FormArea {
   imagenUrl: string;
   imagenUrlAplicada: string;
   imagenArchivo: File | null;
+  /** Ventanas de mantenimiento: franjas en las que el área queda bloqueada. */
+  mantenimiento: VentanaMantenimiento[];
 }
 
 const FORM_VACIO: FormArea = {
@@ -58,6 +60,7 @@ const FORM_VACIO: FormArea = {
   hora_apertura: '08:00', hora_cierre: '22:00',
   costo_por_hora: '', max_reservas_semana: '2',
   imagenUrl: '', imagenUrlAplicada: '', imagenArchivo: null,
+  mantenimiento: [],
 };
 
 /**
@@ -76,6 +79,21 @@ const formatearHoraInput = (valor: unknown): string => {
   const texto = String(valor).trim();
   if (!texto) return '';
   return toTimeOnly(texto).slice(0, 5);
+};
+
+/** Horas en punto de todo el día (00:00 – 23:00) para los selectores de hora. */
+const HORAS_ENTERAS = Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, '0')}:00`);
+
+/**
+ * Ajusta un valor "HH:mm" a la hora EN PUNTO (08:30 → 08:00). Se aplica al
+ * cargar un área en el formulario, por si quedaron horas con minutos guardadas
+ * de antes: los selectores solo ofrecen horas completas (las reservas se
+ * cobran por horas enteras —sp_CrearReservaPago— y los bloques ocupados se
+ * comparan por hora en punto —sp_ListarHorariosDisponibles—).
+ */
+const aHoraEntera = (valor: string): string => {
+  const hora = (valor || '').slice(0, 2);
+  return hora ? `${hora}:00` : '';
 };
 
 /**
@@ -136,6 +154,19 @@ export default function AreasPage() {
   const setCampo = (campo: keyof FormArea, valor: string) =>
     setForm(prev => ({ ...prev, [campo]: valor }));
 
+  // --- Ventanas de mantenimiento ---
+  const agregarVentana = () =>
+    setForm(prev => ({ ...prev, mantenimiento: [...prev.mantenimiento, { hora_inicio: '', hora_fin: '', descripcion: '' }] }));
+
+  const quitarVentana = (indice: number) =>
+    setForm(prev => ({ ...prev, mantenimiento: prev.mantenimiento.filter((_, i) => i !== indice) }));
+
+  const actualizarVentana = (indice: number, cambios: Partial<VentanaMantenimiento>) =>
+    setForm(prev => ({
+      ...prev,
+      mantenimiento: prev.mantenimiento.map((v, i) => (i === indice ? { ...v, ...cambios } : v)),
+    }));
+
   const resetForm = () => {
     setForm(FORM_VACIO);
     setQuitarImagen(false);
@@ -173,13 +204,18 @@ export default function AreasPage() {
       nombre: area.nombre || '',
       descripcion: area.descripcion || '',
       capacidad_max: area.capacidad_max != null ? String(area.capacidad_max) : '',
-      hora_apertura: formatearHoraInput(area.hora_apertura),
-      hora_cierre: formatearHoraInput(area.hora_cierre),
+      hora_apertura: aHoraEntera(formatearHoraInput(area.hora_apertura)),
+      hora_cierre: aHoraEntera(formatearHoraInput(area.hora_cierre)),
       costo_por_hora: area.costo_por_hora != null ? String(area.costo_por_hora) : '',
       max_reservas_semana: area.max_reservas_semana != null ? String(area.max_reservas_semana) : '2',
       imagenUrl: '',
       imagenUrlAplicada: '',
       imagenArchivo: null,
+      mantenimiento: (area.mantenimiento ?? []).map(m => ({
+        hora_inicio: aHoraEntera(formatearHoraInput(m.hora_inicio)),
+        hora_fin: aHoraEntera(formatearHoraInput(m.hora_fin)),
+        descripcion: m.descripcion ?? '',
+      })),
     });
     if (archivoPreview) URL.revokeObjectURL(archivoPreview);
     setArchivoPreview('');
@@ -220,6 +256,23 @@ export default function AreasPage() {
     if (form.hora_cierre <= form.hora_apertura) { showAlert('La hora de cierre debe ser mayor que la hora de apertura.'); return; }
     if (!form.max_reservas_semana || Number(form.max_reservas_semana) < 1) { showAlert('El máximo de reservas semanales debe ser al menos 1.'); return; }
 
+    // Validación de ventanas de mantenimiento (mismas reglas que el backend)
+    for (const [i, v] of form.mantenimiento.entries()) {
+      const num = i + 1;
+      if (!v.hora_inicio || !v.hora_fin) {
+        showAlert(`Ventana de mantenimiento ${num}: indica la hora de inicio y la hora fin.`);
+        return;
+      }
+      if (v.hora_fin <= v.hora_inicio) {
+        showAlert(`Ventana de mantenimiento ${num}: la hora fin debe ser posterior a la hora de inicio.`);
+        return;
+      }
+      if (v.hora_inicio < form.hora_apertura || v.hora_fin > form.hora_cierre) {
+        showAlert(`Ventana de mantenimiento ${num}: debe estar dentro del horario del área (${form.hora_apertura} - ${form.hora_cierre}).`);
+        return;
+      }
+    }
+
     const fd = new FormData();
     fd.append('nombre', form.nombre.trim());
     if (form.descripcion.trim()) fd.append('descripcion', form.descripcion.trim());
@@ -238,15 +291,21 @@ export default function AreasPage() {
       fd.append('foto_principal', form.imagenUrlAplicada);
     }
 
+    // Ventanas de mantenimiento: siempre se envían al editar ([] = limpiarlas
+    // todas); al crear solo si hay alguna.
+    if (drawerMode === 'edit' || form.mantenimiento.length > 0) {
+      fd.append('mantenimiento', JSON.stringify(form.mantenimiento));
+    }
+
     try {
       if (drawerMode === 'create') {
-        await createArea(fd);
+        const resp = await createArea(fd);
         addActivity(`Nueva área común creada: <strong>${form.nombre.trim()}</strong>`, 'fa-plus-circle', 'var(--accent)');
-        addNotification('admin', 'Nueva área', `Se creó el área "${form.nombre.trim()}".`, 'fa-plus-circle');
+        addNotification('admin', 'Nueva área', `Se creó el área "${form.nombre.trim()}".`, 'fa-plus-circle', resp?.id_area ?? null);
       } else if (editandoArea?.id_area != null) {
         await updateArea(editandoArea.id_area, fd);
         addActivity(`Área común editada: <strong>${form.nombre.trim()}</strong>`, 'fa-edit', 'var(--accent)');
-        addNotification('admin', 'Área editada', `El área "${form.nombre.trim()}" fue actualizada.`, 'fa-edit');
+        addNotification('admin', 'Área editada', `El área "${form.nombre.trim()}" fue actualizada.`, 'fa-edit', editandoArea.id_area);
       }
 
       setDrawerOpen(false);
@@ -266,10 +325,10 @@ export default function AreasPage() {
 
       if (activar) {
         addActivity(`Área común habilitada: <strong>${toggleArea.nombre}</strong>`, 'fa-play', 'var(--success)');
-        addNotification('admin', 'Área habilitada', `El área "${toggleArea.nombre}" fue habilitada.`, 'fa-play');
+        addNotification('admin', 'Área habilitada', `El área "${toggleArea.nombre}" fue habilitada.`, 'fa-play', toggleArea.id_area ?? null);
       } else {
         addActivity(`Área común deshabilitada: <strong>${toggleArea.nombre}</strong>`, 'fa-pause', 'var(--warning)');
-        addNotification('admin', 'Área deshabilitada', `El área "${toggleArea.nombre}" fue deshabilitada.`, 'fa-pause');
+        addNotification('admin', 'Área deshabilitada', `El área "${toggleArea.nombre}" fue deshabilitada.`, 'fa-pause', toggleArea.id_area ?? null);
       }
 
       setToggleArea(null);
@@ -326,11 +385,19 @@ export default function AreasPage() {
         <div className="form-row">
           <div className="form-group">
             <label>Hora de apertura *</label>
-            <input type="time" value={form.hora_apertura} onChange={e => setCampo('hora_apertura', e.target.value)} />
+            <select value={form.hora_apertura} onChange={e => setCampo('hora_apertura', e.target.value)}>
+              {HORAS_ENTERAS.map(h => (
+                <option key={h} value={h}>{formatHoraAMPM(h)}</option>
+              ))}
+            </select>
           </div>
           <div className="form-group">
             <label>Hora de cierre *</label>
-            <input type="time" value={form.hora_cierre} onChange={e => setCampo('hora_cierre', e.target.value)} />
+            <select value={form.hora_cierre} onChange={e => setCampo('hora_cierre', e.target.value)}>
+              {HORAS_ENTERAS.map(h => (
+                <option key={h} value={h}>{formatHoraAMPM(h)}</option>
+              ))}
+            </select>
           </div>
         </div>
         <div className="form-row">
@@ -356,6 +423,58 @@ export default function AreasPage() {
             />
           </div>
         </div>
+      </div>
+
+      <div className="form-section">
+        <h4>Mantenimiento</h4>
+        <small className="form-hint">
+          Franjas en las que el área queda bloqueada para reservas (p. ej. limpieza tras cada función del cine).
+          Se pueden agregar varias ventanas o dejar vacío si el área no tiene mantenimiento.
+        </small>
+
+        <div className="mantenimiento-lista">
+          {form.mantenimiento.map((v, i) => (
+            <div key={i} className="mantenimiento-fila">
+              <select
+                value={v.hora_inicio}
+                onChange={e => actualizarVentana(i, { hora_inicio: e.target.value })}
+              >
+                <option value="">Seleccionar...</option>
+                {HORAS_ENTERAS.map(h => (
+                  <option key={h} value={h}>{formatHoraAMPM(h)}</option>
+                ))}
+              </select>
+              <span>a</span>
+              <select
+                value={v.hora_fin}
+                onChange={e => actualizarVentana(i, { hora_fin: e.target.value })}
+              >
+                <option value="">Seleccionar...</option>
+                {HORAS_ENTERAS.map(h => (
+                  <option key={h} value={h}>{formatHoraAMPM(h)}</option>
+                ))}
+              </select>
+              <input
+                type="text"
+                value={v.descripcion ?? ''}
+                placeholder="Descripción (opcional)"
+                onChange={e => actualizarVentana(i, { descripcion: e.target.value })}
+              />
+              <button
+                type="button"
+                className="btn-quitar"
+                onClick={() => quitarVentana(i)}
+                title="Quitar ventana"
+              >
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <button type="button" className="btn-secondary mantenimiento-agregar" onClick={agregarVentana}>
+          <i className="fas fa-plus"></i> Agregar ventana de mantenimiento
+        </button>
       </div>
 
       <div className="form-section">

@@ -9,7 +9,7 @@
  * Responsabilidades
  * - Definir la estructura de datos de: Reserva, Visitante, Personal,
  *   Residente, Contrato, AreaInquilino, ActivityItem, NotificationItem
- * - Definir tipos auxiliares como UserRole y PageId
+ * - Definir tipos auxiliares como UserRole
  *
  * Se comunica con
  * - TODOS los archivos del proyecto (es el contrato de datos central)
@@ -81,21 +81,6 @@ export interface Reserva {
   pago_estado: string;
   horas_anticipacion_cancelacion?: number;
   hora?: string;
-}
-
-export interface CrearReservaPayload {
-  id_area: number;
-  fecha: string;
-  hora_inicio: string;
-  hora_fin: string;
-  cantidad_personas: number;
-}
-
-export interface EditarReservaPayload {
-  fecha: string;
-  hora_inicio: string;
-  hora_fin: string;
-  cantidad_personas: number;
 }
 
 export interface Visitante {
@@ -234,19 +219,4 @@ export interface ProfileData {
 
 export type UserRole = 'admin' | 'guardia' | 'inquilino';
 
-export interface User {
-  username: string;
-  role: UserRole;
-  profile: ProfileData;
-}
 
-export type PageId =
-  // Admin
-  | 'dashboard' | 'actividad' | 'personal' | 'residentes'
-  | 'departamentos' | 'areas' | 'reservas' | 'visitas-autorizadas'
-  | 'contratos' | 'pagos' | 'reportes' | 'bitacora' | 'configuracion'
-  // Guardia
-  | 'visitas'
-  // Inquilino
-  | 'reservar-area' | 'nueva-reserva' | 'mis-reservas' | 'mis-contratos'
-  | 'registrar-visitante' | 'mis-visitantes';

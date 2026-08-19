@@ -11,6 +11,8 @@
  *
  * Endpoints
  * - obtener(...)        → GET  /notificaciones?leida=&limite=
+ * - crear(...)          → POST /notificaciones (persiste un aviso del propio
+ *                          usuario; evita la "noti fantasma" local)
  * - marcarLeida(id)     → PATCH /notificaciones/:id/leida
  * - marcarTodasLeidas() → PATCH /notificaciones/marcar-todas
  *
@@ -51,6 +53,25 @@ const TITULOS: Record<string, string> = {
   RESERVA_CANCELADA: 'Reserva cancelada',
   NUEVO_PAGO: 'Nuevo pago',
   NUEVO_RESIDENTE: 'Nuevo residente',
+  RESIDENTE_EDITADO: 'Residente editado',
+  RESIDENTE_HABILITADO: 'Residente habilitado',
+  RESIDENTE_DESHABILITADO: 'Residente deshabilitado',
+  NUEVA_AREA: 'Nueva área',
+  AREA_EDITADA: 'Área editada',
+  AREA_HABILITADA: 'Área habilitada',
+  AREA_DESHABILITADA: 'Área deshabilitada',
+  NUEVO_CONTRATO: 'Nuevo contrato',
+  CONTRATO_EDITADO: 'Contrato editado',
+  NUEVO_DEPARTAMENTO: 'Nuevo departamento',
+  DEPARTAMENTO_EDITADO: 'Departamento editado',
+  DEPARTAMENTO_HABILITADO: 'Departamento habilitado',
+  DEPARTAMENTO_DESHABILITADO: 'Departamento deshabilitado',
+  NUEVO_EMPLEADO: 'Nuevo empleado',
+  EMPLEADO_EDITADO: 'Empleado editado',
+  EMPLEADO_HABILITADO: 'Empleado habilitado',
+  EMPLEADO_DESHABILITADO: 'Empleado deshabilitado',
+  NUEVO_VISITANTE: 'Nuevo visitante',
+  PAGO_DE_MENSUALIDAD: 'Pago de mensualidad',
   RECORDATORIO_CANCELACION: 'Recordatorio de cancelación',
   PAGO_CONTRATO: 'Pago de mensualidad',
 };
@@ -68,6 +89,25 @@ const ICONOS: Record<string, string> = {
   RESERVA_CANCELADA: 'fa-calendar-times',
   NUEVO_PAGO: 'fa-credit-card',
   NUEVO_RESIDENTE: 'fa-user-plus',
+  RESIDENTE_EDITADO: 'fa-edit',
+  RESIDENTE_HABILITADO: 'fa-user-check',
+  RESIDENTE_DESHABILITADO: 'fa-user-slash',
+  NUEVA_AREA: 'fa-plus-circle',
+  AREA_EDITADA: 'fa-edit',
+  AREA_HABILITADA: 'fa-play',
+  AREA_DESHABILITADA: 'fa-pause',
+  NUEVO_CONTRATO: 'fa-file-signature',
+  CONTRATO_EDITADO: 'fa-edit',
+  NUEVO_DEPARTAMENTO: 'fa-door-open',
+  DEPARTAMENTO_EDITADO: 'fa-edit',
+  DEPARTAMENTO_HABILITADO: 'fa-user-check',
+  DEPARTAMENTO_DESHABILITADO: 'fa-door-closed',
+  NUEVO_EMPLEADO: 'fa-user-plus',
+  EMPLEADO_EDITADO: 'fa-edit',
+  EMPLEADO_HABILITADO: 'fa-user-check',
+  EMPLEADO_DESHABILITADO: 'fa-user-slash',
+  NUEVO_VISITANTE: 'fa-user-plus',
+  PAGO_DE_MENSUALIDAD: 'fa-credit-card',
   RECORDATORIO_CANCELACION: 'fa-clock',
   PAGO_CONTRATO: 'fa-credit-card',
 };
@@ -205,6 +245,14 @@ export const notificacionesService = {
     const qs = query.toString();
     return api.get<NotificacionesResponse>(`/notificaciones${qs ? `?${qs}` : ''}`);
   },
+
+  /**
+   * POST /notificaciones — persiste un aviso del usuario autenticado
+   * (sp_CrearNotificacion). La campana se recarga desde la BD, así que sin
+   * esto los avisos generados solo en la UI desaparecerían al siguiente poll.
+   */
+  crear: (tipo: string, mensaje: string, idReferencia?: number | null): Promise<{ message: string }> =>
+    api.post('/notificaciones', { tipo, mensaje, id_referencia: idReferencia ?? null }),
 
   /** PATCH /notificaciones/:id/leida — marca UNA notificación como leída. */
   marcarLeida: (idNotificacion: number): Promise<{ message: string }> =>

@@ -3,7 +3,6 @@
  *
  * Verifica que:
  * - getLocalDateString formatee fechas correctamente como YYYY-MM-DD
- * - getLocalDateTimeString incluya hora y minutos
  * - formatHora convierta formato 24h a 12h con AM/PM
  * - formatHoraAMPM convierta a formato 12h con a.m./p.m.
  * - getTimeAgo retorne textos relativos en español
@@ -13,7 +12,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   getLocalDateString,
-  getLocalDateTimeString,
   formatHora,
   formatHoraAMPM,
   toTimeOnly,
@@ -41,17 +39,6 @@ describe('getLocalDateString', () => {
   it('debe padding con ceros para meses y días de un dígito', () => {
     const fecha = new Date(2026, 0, 5); // 5 enero 2026
     expect(getLocalDateString(fecha)).toBe('2026-01-05');
-  });
-});
-
-// ============================================================
-// getLocalDateTimeString
-// ============================================================
-describe('getLocalDateTimeString', () => {
-  it('debe incluir fecha y hora en el formato YYYY-MM-DD HH:MM', () => {
-    const fecha = new Date(2026, 6, 22, 15, 30);
-    const resultado = getLocalDateTimeString(fecha);
-    expect(resultado).toBe('2026-07-22 15:30');
   });
 });
 

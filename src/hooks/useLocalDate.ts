@@ -9,7 +9,6 @@
  *
  * Funciones que expone
  * - getLocalDateString(date?)  → Retorna "YYYY-MM-DD"
- * - getLocalDateTimeString(date?) → Retorna "YYYY-MM-DD HH:MM"
  * - formatHora(hora24)         → Convierte "15:30" a "03:30 PM"
  * - formatHoraAMPM(hora24)     → Convierte "15:30" a "3:30 p.m."
  * - toDateOnly(fecha)          → Convierte ISO SQL Server ("...T00:00:00.000Z")
@@ -34,12 +33,6 @@ export function getLocalDateString(date: Date = new Date()): string {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
-}
-
-export function getLocalDateTimeString(date: Date = new Date()): string {
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  return `${getLocalDateString(date)} ${hours}:${minutes}`;
 }
 
 export function formatHora(hora24: string): string {

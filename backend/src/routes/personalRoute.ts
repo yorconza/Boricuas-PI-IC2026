@@ -1,3 +1,26 @@
+/**
+ * ============================================================================
+ * Archivo: personalRoute.ts
+ * ============================================================================
+ *
+ * ¿Qué hace?
+ * Define las rutas del módulo de Personal (montadas en /api/personal
+ * desde server.ts):
+ *
+ *   GET    /api/personal              → sp_Personal_Listar
+ *   POST   /api/personal              → sp_Personal_Insertar
+ *   PUT    /api/personal/:id          → sp_Personal_Actualizar
+ *   PATCH  /api/personal/:id/desactivar → sp_Personal_Desactivar
+ *   PATCH  /api/personal/:id/reactivar  → sp_Personal_Reactivar
+ *
+ * Protección: JWT → 2FA → sesión + SET CONTEXT_INFO → rol Administrador.
+ *
+ * Se comunica con:
+ *   - personalController.ts (handler de cada ruta).
+ *   - server.ts (montaje en /api/personal).
+ *
+ * ============================================================================
+ */
 import { Router } from 'express';
 import {
     getPersonal,

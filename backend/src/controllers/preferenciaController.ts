@@ -1,3 +1,26 @@
+/**
+ * ============================================================================
+ * Archivo: preferenciaController.ts
+ * ============================================================================
+ *
+ * ¿Qué hace?
+ * Controller del módulo de Preferencias de Usuario. Aplica a CUALQUIER rol
+ * (Inquilino, Guarda, Administrador):
+ *
+ *   getPreferencias        → sp_ObtenerPreferencias (tema, idioma, fuente, tamaño)
+ *   actualizarPreferencias → sp_ActualizarPreferencias (PATCH parcial, ISNULL en SP)
+ *
+ * Seguridad:
+ *   - Rutas protegidas por JWT + 2FA + sesión (sin authorizeRole).
+ *   - id_usuario_actual se toma de req.user.
+ *
+ * Se comunica con:
+ *   - SQL Server vía confDB.getConnection().
+ *   - Ruta: preferenciaRoute.ts.
+ *   - Frontend: PreferenciasContext.tsx → preferenciaService.ts.
+ *
+ * ============================================================================
+ */
 import { type Request, type Response } from 'express';
 import { getConnection } from '../config/confDB.js';
 import sql from 'mssql';

@@ -39,13 +39,20 @@ import { useAuth } from '../../hooks/useAuth';
 import { authService } from '../../services/authService';
 import { formatearCedula, formatearTelefono, validarCedula, validarTelefono } from '../../utils/formatters';
 
+// Misma política que RecuperarPasswordPage y el backend (authController):
+// mín 8 caracteres con mayúscula, minúscula, número y símbolo (@$!%*?&).
+const REGEX_CONTRASENA = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+
 export default function LoginPage() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [fullName, setFullName] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [signupEmail, setSignupEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [cedula, setCedula] = useState('');
@@ -96,9 +103,8 @@ export default function LoginPage() {
       return;
     }
 
-    const passwordRegex = /^(?=.*[!@#$%^&*(),.?":{}|<>]).{8,12}$/;
-    if (!passwordRegex.test(signupPassword)) {
-      setErrorRegistro('Password must be 8-12 characters with at least one special character.');
+    if (!REGEX_CONTRASENA.test(signupPassword)) {
+      setErrorRegistro('Password must have at least 8 characters with an uppercase letter, a lowercase letter, a number and a special character (@$!%*?&).');
       return;
     }
 
@@ -209,13 +215,23 @@ export default function LoginPage() {
               </div>
               <div className="input-group">
                 <label htmlFor="login-password">PASSWORD</label>
-                <input
-                  type="password"
-                  id="login-password"
-                  placeholder="Enter your password"
-                  value={loginPassword}
-                  onChange={e => setLoginPassword(e.target.value)}
-                />
+                <div className="password-field">
+                  <input
+                    type={showLoginPassword ? 'text' : 'password'}
+                    id="login-password"
+                    placeholder="Enter your password"
+                    value={loginPassword}
+                    onChange={e => setLoginPassword(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    aria-label={showLoginPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    onClick={() => setShowLoginPassword(v => !v)}
+                  >
+                    <i className={`fas ${showLoginPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                  </button>
+                </div>
               </div>
               <div className="forgot-password">
                 <a href="/forgot" onClick={e => { e.preventDefault(); navigate('/forgot'); }}>Forgot your password?</a>
@@ -251,23 +267,46 @@ export default function LoginPage() {
               </div>
               <div className="input-group">
                 <label htmlFor="contraseña_hash">PASSWORD</label>
-                <input
-                  type="password"
-                  id="contraseña_hash"
-                  placeholder="Enter your password"
-                  value={signupPassword}
-                  onChange={e => setSignupPassword(e.target.value)}
-                />
+                <div className="password-field">
+                  <input
+                    type={showSignupPassword ? 'text' : 'password'}
+                    id="contraseña_hash"
+                    placeholder="Enter your password"
+                    value={signupPassword}
+                    onChange={e => setSignupPassword(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    aria-label={showSignupPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    onClick={() => setShowSignupPassword(v => !v)}
+                  >
+                    <i className={`fas ${showSignupPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                  </button>
+                </div>
+                <small className="form-hint">
+                  Mínimo 8 caracteres con una mayúscula, una minúscula, un número y un símbolo (@$!%*?&).
+                </small>
               </div>
               <div className="input-group">
                 <label htmlFor="confirm_password">CONFIRM PASSWORD</label>
-                <input
-                  type="password"
-                  id="confirm_password"
-                  placeholder="Confirm your password"
-                  value={confirmPassword}
-                  onChange={e => setConfirmPassword(e.target.value)}
-                />
+                <div className="password-field">
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    id="confirm_password"
+                    placeholder="Confirm your password"
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    aria-label={showConfirmPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    onClick={() => setShowConfirmPassword(v => !v)}
+                  >
+                    <i className={`fas ${showConfirmPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                  </button>
+                </div>
               </div>
               <div className="input-group">
                 <label htmlFor="correo">E-MAIL</label>

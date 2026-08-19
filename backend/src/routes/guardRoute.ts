@@ -1,3 +1,26 @@
+/**
+ * ============================================================================
+ * Archivo: guardRoute.ts
+ * ============================================================================
+ *
+ * ¿Qué hace?
+ * Define las rutas del módulo de Guardia (montadas en /api/guard desde server.ts):
+ *
+ *   GET    /api/guard/dashboard/summary   → Resumen de tarjetas (hoy)
+ *   GET    /api/guard/dashboard/upcoming  → Próximas visitas pendientes
+ *   GET    /api/guard/visits/pending      → Visitas esperadas (Pendiente)
+ *   GET    /api/guard/visits/history      → Historial del día
+ *   GET    /api/guard/visits/:id          → Detalle de una visita (modal)
+ *   PATCH  /api/guard/visits/:id/status   → Autorizar / Rechazar visita
+ *
+ * Protección: JWT → 2FA → sesión + SET CONTEXT_INFO → rol Guarda.
+ *
+ * Se comunica con:
+ *   - guardController.ts (handler de cada ruta).
+ *   - server.ts (montaje en /api/guard).
+ *
+ * ============================================================================
+ */
 import { Router } from 'express';
 import {
     getResumenVisitasHoy,

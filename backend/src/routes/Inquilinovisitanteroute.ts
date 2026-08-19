@@ -1,3 +1,26 @@
+/**
+ * ============================================================================
+ * Archivo: Inquilinovisitanteroute.ts
+ * ============================================================================
+ *
+ * ¿Qué hace?
+ * Define las rutas de Visitantes para Inquilinos (montadas en
+ * /api/inquilino/visitantes desde server.ts):
+ *
+ *   GET    /api/inquilino/visitantes/proxima  → sp_ObtenerMiProximaVisita
+ *   GET    /api/inquilino/visitantes          → sp_ListarMisVisitantes
+ *   GET    /api/inquilino/visitantes/:id      → sp_ObtenerVisitanteDetalle
+ *   POST   /api/inquilino/visitantes          → sp_RegistrarVisitante
+ *   PATCH  /api/inquilino/visitantes/:id      → sp_CancelarVisitante
+ *
+ * Protección: JWT → 2FA → sesión + SET CONTEXT_INFO → rol Inquilino.
+ *
+ * Se comunica con:
+ *   - Inquilinovisitantecontroller.ts (handler de cada ruta).
+ *   - server.ts (montaje en /api/inquilino/visitantes).
+ *
+ * ============================================================================
+ */
 import { Router } from 'express';
 import {
     registrarVisitante,

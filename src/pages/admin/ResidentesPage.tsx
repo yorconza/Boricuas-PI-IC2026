@@ -10,7 +10,7 @@ import Drawer from '../../components/Drawer';
 import Modal from '../../components/Modal';
 import { useData } from '../../context/DataContext';
 import { useAlert } from '../../components/Alert';
-import { formatearTelefono, formatearCedula, validarTelefono, validarCedula } from '../../utils/formatters';
+import { formatearTelefono, formatearCedula, validarTelefono, validarCedula, validarCorreoDominio } from '../../utils/formatters';
 import type { Residente } from '../../types';
 
 export default function ResidentesPage() {
@@ -102,6 +102,17 @@ export default function ResidentesPage() {
         showAlert(errorCedula);
         return;
       }
+      // El nombre no puede ser solo números
+      if (!/[a-zA-ZáéíóúñÑ]/.test(form.nombre.trim())) {
+        showAlert('El nombre debe contener letras (no solo números).');
+        return;
+      }
+      // El correo debe ser de un dominio público permitido
+      const errorCorreo = validarCorreoDominio(form.correo);
+      if (errorCorreo) {
+        showAlert(errorCorreo);
+        return;
+      }
     }
 
     try {
@@ -116,9 +127,9 @@ export default function ResidentesPage() {
         }
 
         // Llamada a la API de SQL Server (contraseña real, sin valores fijos)
-        await crearResidente(form.nombre, form.correo, form.contrasena, form.telefono, form.cedula);
+        const nuevoId = await crearResidente(form.nombre, form.correo, form.contrasena, form.telefono, form.cedula);
         addActivity(`Nuevo residente registrado: <strong>${form.nombre}</strong>`, 'fa-user-plus', 'var(--success)');
-        addNotification('admin', 'Nuevo residente', `Se registró a ${form.nombre} como residente.`, 'fa-user-plus');
+        addNotification('admin', 'Nuevo residente', `Se registró a ${form.nombre} como residente.`, 'fa-user-plus', nuevoId);
         showAlert('Residente insertado con éxito en la Base de Datos.');
       } else if (drawerMode === 'edit' && selectedItem) {
         // Llamada a la API de edición
@@ -131,7 +142,7 @@ export default function ResidentesPage() {
         }
 
         addActivity(`Residente editado: <strong>${form.nombre}</strong>`, 'fa-edit', 'var(--accent)');
-        addNotification('admin', 'Residente editado', `Se actualizó la información de ${form.nombre}.`, 'fa-edit');
+        addNotification('admin', 'Residente editado', `Se actualizó la información de ${form.nombre}.`, 'fa-edit', selectedItem.id);
         showAlert('Residente actualizado con éxito.');
       }
 
@@ -152,10 +163,10 @@ export default function ResidentesPage() {
 
       if (!activar) {
         addActivity(`Residente deshabilitado: <strong>${deleteItem.nombre}</strong>`, 'fa-user-slash', 'var(--warning)');
-        addNotification('admin', 'Residente deshabilitado', `${deleteItem.nombre} ha sido deshabilitado.`, 'fa-user-slash');
+        addNotification('admin', 'Residente deshabilitado', `${deleteItem.nombre} ha sido deshabilitado.`, 'fa-user-slash', deleteItem.id);
       } else {
         addActivity(`Residente habilitado: <strong>${deleteItem.nombre}</strong>`, 'fa-user-check', 'var(--success)');
-        addNotification('admin', 'Residente habilitado', `${deleteItem.nombre} ha sido habilitado.`, 'fa-user-check');
+        addNotification('admin', 'Residente habilitado', `${deleteItem.nombre} ha sido habilitado.`, 'fa-user-check', deleteItem.id);
       }
 
       setModalOpen(false);

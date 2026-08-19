@@ -1,3 +1,24 @@
+/**
+ * ============================================================================
+ * Archivo: contratoRoute.ts
+ * ============================================================================
+ *
+ * ¿Qué hace?
+ * Define las rutas del módulo de Contratos (montadas en /api/contratos desde
+ * server.ts):
+ *
+ *   GET  /api/contratos       → sp_Contrato_Listar
+ *   POST /api/contratos       → sp_Contrato_Insertar
+ *   PUT  /api/contratos/:id   → sp_Contrato_Actualizar
+ *
+ * Protección: JWT → 2FA → sesión + SET CONTEXT_INFO → rol Administrador.
+ *
+ * Se comunica con:
+ *   - contractoController.ts (handler de cada ruta).
+ *   - server.ts (montaje en /api/contratos).
+ *
+ * ============================================================================
+ */
 import { Router } from 'express';
 import {
     getContratos,

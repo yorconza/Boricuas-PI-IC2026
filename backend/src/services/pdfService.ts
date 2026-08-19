@@ -1,3 +1,32 @@
+/**
+ * ============================================================================
+ * Archivo: pdfService.ts
+ * ============================================================================
+ *
+ * ¿Qué hace?
+ * Service estático para generar PDFs de reportes usando pdfkit + svg-to-pdfkit.
+ * Métodos públicos (estáticos):
+ *
+ *   generarPdfReservas(data, res)   → Tabla de reservas con logo BORICUAS.
+ *   generarPdfContratos(data, res)  → Tabla de contratos.
+ *   generarPdfPagos(data, res)      → Tabla de pagos.
+ *   generarPdfVisitas(data, res)    → Tabla de visitas autorizadas.
+ *
+ * Cada método:
+ *   1. Crea un PDFDocument (A4, márgenes 40).
+ *   2. Renderiza header con logo SVG + título + fecha.
+ *   3. Renderiza filas de la tabla (paginación automática a >740px).
+ *   4. Renderiza footer con numeración dinámica (Página X de Y).
+ *
+ * Interfaces exportadas: ReservaReporte, ContratoReporte, IPagoReporte,
+ * IVisitaReporte (tolerantes a alias de columna del SP).
+ *
+ * Se comunica con:
+ *   - Controllers: reportesController, reservaReporteController, contratoReporteController.
+ *   - No accede directamente a la BD (recibe datos preconsultados).
+ *
+ * ============================================================================
+ */
 import PDFDocument from 'pdfkit';
 import SVGtoPDF from 'svg-to-pdfkit';
 import { type Response } from 'express';

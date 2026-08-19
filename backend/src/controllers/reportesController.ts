@@ -1,3 +1,29 @@
+/**
+ * ============================================================================
+ * Archivo: reportesController.ts
+ * ============================================================================
+ *
+ * ¿Qué hace?
+ * Endpoints para generar reportes en PDF. Consumen SPs de reportes y usan
+ * PdfService para renderizar:
+ *
+ *   obtenerReportePagosPDF   → sp_ReportePagos  → PdfService.generarPdfPagos
+ *   obtenerReporteVisitasPDF → sp_ReporteVisitas → PdfService.generarPdfVisitas
+ *
+ * Nota de fechas:
+ *   - Pagos/Visitas: SPs comparan CAST(fecha AS DATE) ≤ fecha_fin (rango
+ *     inclusivo por fecha), NO se suma +1 día.
+ *   - Por defecto, si no llegan fechas, el reporte es solo de HOY (fecha
+ *     local del servidor).
+ *
+ * Se comunica con:
+ *   - SQL Server vía confDB.getConnection().
+ *   - pdfService.ts (generación de PDF con pdfkit + svg-to-pdfkit).
+ *   - Ruta: reporteRoute.ts (API REST) / reporteVisitasRoute.ts.
+ *   - Frontend: reportesService.ts → botón de descarga en admin.
+ *
+ * ============================================================================
+ */
 // backend/src/controllers/reportesController.ts
 
 import type { Request, Response } from 'express';
@@ -6,29 +32,13 @@ import { getConnection } from '../config/confDB.js';
 import { 
     PdfService, 
     type IPagoReporte, 
-    type IVisitaReporte, 
-    type ReservaReporte, 
-    type ContratoReporte 
+    type IVisitaReporte 
 } from '../services/pdfService.js';
+import { getFechaActualDB } from '../services/timezoneService.js';
 
 interface IReporteQueryParams {
     fecha_inicio?: string;
     fecha_fin?: string;
-}
-
-/**
- * Función auxiliar para ajustar la fecha fin sumándole 1 día,
- * resolviendo el desfase por zona horaria/UTC en consultas por fecha.
- */
-function calcularFechaFinInclusiva(fechaFin?: string): string | null {
-    if (!fechaFin) return null;
-    const date = new Date(fechaFin);
-    date.setDate(date.getDate() + 1);
-    
-    const isoString = date.toISOString();
-    const partes = isoString.split('T');
-    
-    return partes[0] ?? null;
 }
 
 // ==========================================
@@ -47,25 +57,30 @@ export async function obtenerReportePagosPDF(
         const { fecha_inicio, fecha_fin } = req.query;
 
         // NOTA (fechas del reporte de pagos): a diferencia de los reportes de
-        // visitas/reservas (cuyos SPs comparan DATETIME completos y necesitan
-        // el +1 día de calcularFechaFinInclusiva), sp_ReportePagos compara
+        // visitas/reservas/contratos (cuyos SPs comparan DATETIME completos y
+        // necesitan el ajuste de +1 día en la fecha fin), sp_ReportePagos compara
         // `CAST(fecha_pago AS DATE) <= @fecha_fin` (rango inclusivo por fecha),
         // así que aquí NO se suma un día — si se sumara, el reporte incluiría
         // un día de más (importante para el "reporte del día": hoy + mañana).
+        //
+        // Por defecto el reporte es SOLO de los pagos de HOY (fecha de la BD,
+        // que puede diferir de la del host si SQL corre en Docker/UTC); si
+        // llega un rango de fechas, se respeta tal cual.
+        const hoyLocal = getFechaActualDB();
+        const inicioEfectivo: string = fecha_inicio ? String(fecha_inicio) : hoyLocal;
+        const finEfectivo: string = fecha_fin ? String(fecha_fin) : hoyLocal;
+
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader(
             'Content-Disposition',
-            `inline; filename=Reporte_Pagos_${fecha_inicio || 'Inicio'}_a_${fecha_fin || 'Fin'}.pdf`
+            `inline; filename=Reporte_Pagos_${inicioEfectivo}_a_${finEfectivo}.pdf`
         );
 
         const pool = await getConnection();
         const request = new sql.Request(pool);
 
-        const paramInicio: string | null = fecha_inicio ? fecha_inicio : null;
-        const paramFin: string | null = fecha_fin ? fecha_fin : null;
-
-        request.input('fecha_inicio', sql.Date, paramInicio);
-        request.input('fecha_fin', sql.Date, paramFin);
+        request.input('fecha_inicio', sql.Date, inicioEfectivo);
+        request.input('fecha_fin', sql.Date, finEfectivo);
 
         const result = await request.execute<IPagoReporte>('dbo.sp_ReportePagos');
         const listaPagos: IPagoReporte[] = result.recordset;
@@ -85,45 +100,6 @@ export async function obtenerReportePagosPDF(
     }
 }
 
-/**
- * Endpoint para obtener los datos del reporte en JSON
- * GET /api/reportes/pagos/data?fecha_inicio=YYYY-MM-DD&fecha_fin=YYYY-MM-DD
- */
-export async function obtenerReportePagosJSON(
-    req: Request<Record<string, never>, unknown, unknown, IReporteQueryParams>,
-    res: Response
-): Promise<void> {
-    try {
-        const { fecha_inicio, fecha_fin } = req.query;
-        // Misma regla que el PDF: sp_ReportePagos compara por DATE, así que la
-        // fecha fin se envía tal cual (sin +1 día).
-        const pool = await getConnection();
-        const request = new sql.Request(pool);
-
-        const paramInicio: string | null = fecha_inicio ? fecha_inicio : null;
-        const paramFin: string | null = fecha_fin ? fecha_fin : null;
-
-        request.input('fecha_inicio', sql.Date, paramInicio);
-        request.input('fecha_fin', sql.Date, paramFin);
-
-        const result = await request.execute<IPagoReporte>('dbo.sp_ReportePagos');
-
-        res.status(200).json({
-            success: true,
-            total_registros: result.recordset.length,
-            data: result.recordset
-        });
-
-    } catch (error) {
-        console.error('Error obteniendo datos del reporte de pagos:', error);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Error al consultar los datos del reporte',
-            error: error instanceof Error ? error.message : error 
-        });
-    }
-}
-
 // ==========================================
 // 2. REPORTE DE VISITAS AUTORIZADAS
 // ==========================================
@@ -140,8 +116,8 @@ export async function obtenerReporteVisitasPDF(
         const { fecha_inicio, fecha_fin } = req.query;
         // NOTA (fechas): sp_ReporteVisitas compara `CAST(fecha_autorizacion AS
         // DATE) <= @fecha_fin` (rango inclusivo por fecha), así que la fecha fin
-        // se envía tal cual — sin el +1 día de calcularFechaFinInclusiva (que
-        // solo aplica a los SPs que comparan DATETIME completos).
+        // se envía tal cual — sin el ajuste de +1 día (que solo aplica a los
+        // SPs que comparan DATETIME completos, como los de reservas/contratos).
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader(
             'Content-Disposition',
@@ -175,137 +151,5 @@ export async function obtenerReporteVisitasPDF(
     }
 }
 
-/**
- * Endpoint para obtener los datos del reporte de visitas en JSON
- * GET /api/reportes/visitas/data?fecha_inicio=YYYY-MM-DD&fecha_fin=YYYY-MM-DD
- */
-export async function obtenerReporteVisitasJSON(
-    req: Request<Record<string, never>, unknown, unknown, IReporteQueryParams>,
-    res: Response
-): Promise<void> {
-    try {
-        const { fecha_inicio, fecha_fin } = req.query;
-        // Misma regla que el PDF: sp_ReporteVisitas compara por DATE, así que la
-        // fecha fin se envía tal cual (sin +1 día).
-        const pool = await getConnection();
-        const request = new sql.Request(pool);
 
-        const paramInicio: string | null = fecha_inicio ? fecha_inicio : null;
-        const paramFin: string | null = fecha_fin ? fecha_fin : null;
 
-        request.input('fecha_inicio', sql.Date, paramInicio);
-        request.input('fecha_fin', sql.Date, paramFin);
-
-        const result = await request.execute<IVisitaReporte>('dbo.sp_ReporteVisitas');
-
-        res.status(200).json({
-            success: true,
-            total_registros: result.recordset.length,
-            data: result.recordset
-        });
-
-    } catch (error) {
-        console.error('Error obteniendo datos del reporte de visitas:', error);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Error al consultar las visitas autorizadas',
-            error: error instanceof Error ? error.message : error 
-        });
-    }
-}
-
-// ==========================================
-// 3. REPORTE DE RESERVAS
-// ==========================================
-
-/**
- * Endpoint para obtener el reporte de reservas en PDF
- * GET /api/reportes/reservas/pdf?fecha_inicio=YYYY-MM-DD&fecha_fin=YYYY-MM-DD
- */
-export async function obtenerReporteReservasPDF(
-    req: Request<Record<string, never>, unknown, unknown, IReporteQueryParams>,
-    res: Response
-): Promise<void> {
-    try {
-        const { fecha_inicio, fecha_fin } = req.query;
-        const fechaFinAjustada = calcularFechaFinInclusiva(fecha_fin);
-
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader(
-            'Content-Disposition',
-            `inline; filename=Reporte_Reservas_${fecha_inicio || 'Inicio'}_a_${fecha_fin || 'Fin'}.pdf`
-        );
-
-        const pool = await getConnection();
-        const request = new sql.Request(pool);
-
-        const paramInicio: string | null = fecha_inicio ? fecha_inicio : null;
-        const paramFin: string | null = fechaFinAjustada ? fechaFinAjustada : null;
-
-        request.input('fecha_inicio', sql.Date, paramInicio);
-        request.input('fecha_fin', sql.Date, paramFin);
-
-        const result = await request.execute<ReservaReporte>('dbo.sp_ReporteReservas');
-        const listaReservas: ReservaReporte[] = result.recordset;
-
-        PdfService.generarPdfReservas(listaReservas, res);
-
-    } catch (error) {
-        console.error('Error generando reporte de reservas PDF:', error);
-        if (!res.headersSent) {
-            res.status(500).json({ 
-                success: false, 
-                message: 'Error interno al generar el reporte de reservas en PDF',
-                error: error instanceof Error ? error.message : error 
-            });
-        }
-    }
-}
-
-// ==========================================
-// 4. REPORTE DE CONTRATOS
-// ==========================================
-
-/**
- * Endpoint para obtener el reporte de contratos en PDF
- * GET /api/reportes/contratos/pdf?fecha_inicio=YYYY-MM-DD&fecha_fin=YYYY-MM-DD
- */
-export async function obtenerReporteContratosPDF(
-    req: Request<Record<string, never>, unknown, unknown, IReporteQueryParams>,
-    res: Response
-): Promise<void> {
-    try {
-        const { fecha_inicio, fecha_fin } = req.query;
-        const fechaFinAjustada = calcularFechaFinInclusiva(fecha_fin);
-
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader(
-            'Content-Disposition',
-            `inline; filename=Reporte_Contratos_${fecha_inicio || 'Inicio'}_a_${fecha_fin || 'Fin'}.pdf`
-        );
-
-        const pool = await getConnection();
-        const request = new sql.Request(pool);
-
-        const paramInicio: string | null = fecha_inicio ? fecha_inicio : null;
-        const paramFin: string | null = fechaFinAjustada ? fechaFinAjustada : null;
-
-        request.input('fecha_inicio', sql.Date, paramInicio);
-        request.input('fecha_fin', sql.Date, paramFin);
-
-        const result = await request.execute<ContratoReporte>('dbo.sp_ReporteContratos');
-        const listaContratos: ContratoReporte[] = result.recordset;
-
-        PdfService.generarPdfContratos(listaContratos, res);
-
-    } catch (error) {
-        console.error('Error generando reporte de contratos PDF:', error);
-        if (!res.headersSent) {
-            res.status(500).json({ 
-                success: false, 
-                message: 'Error interno al generar el reporte de contratos en PDF',
-                error: error instanceof Error ? error.message : error 
-            });
-        }
-    }
-}

@@ -26,6 +26,10 @@ interface AlertaDashboard {
 export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
   const { dashboardData, activityLog, recargarDashboard } = useData();
 
+  // Máx. de registros visibles en la tarjeta de Actividad reciente; "Ver todas"
+  // lleva a la pantalla completa (ActividadPage) con el resto y el botón Volver.
+  const ACTIVIDAD_VISIBLE_MAX = 6;
+
   useEffect(() => {
     recargarDashboard();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -147,7 +151,7 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
             {actividadReciente.length === 0 ? (
               <p style={{ color: 'var(--text-muted)', padding: 'var(--space-2) 0' }}>No hay actividad reciente.</p>
             ) : (
-              actividadReciente.map((item, index) => (
+              actividadReciente.slice(0, ACTIVIDAD_VISIBLE_MAX).map((item, index) => (
                 <div key={item.id ?? index} className="activity-item">
                   <span
                     className="activity-dot"

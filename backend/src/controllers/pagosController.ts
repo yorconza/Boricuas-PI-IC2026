@@ -18,15 +18,12 @@
  *     el inquilino del contrato (el SP valida la pertenencia).
  *
  * Nota sobre el listado (GET /api/pagos):
- *   El spec del módulo pedía consumir `sp_ListarPagos` o la vista
- *   `VW_AdministracionPagos`, pero esa vista NO incluye `id_contrato`, por lo
- *   que no se podría distinguir un pago de "Contrato" de uno "Administrativo"
- *   (columna `categoria` requerida por la vista unificada). En lugar de
- *   modificar la BD (regla del proyecto: no tocar SPs/vistas), se consulta
- *   directamente la tabla `Pago` con los MISMOS filtros que aplica el SP
- *   (busqueda, estado, solo_hoy, fecha_inicio, fecha_fin) más la categoría
- *   calculada (Reserva / Contrato / Administrativo) y paginación OFFSET-FETCH
- *   (mismo formato de respuesta que /api/bitacora).
+ *   El listado consume `sp_ListarPagos` (modificado): la vista
+ *   `VW_AdministracionPagos` ahora incluye `id_contrato` y la categoría
+ *   calculada (Reserva / Contrato / Administrativo), y el SP devuelve la
+ *   paginación (total + datos) en 2 recordsets con los mismos filtros
+ *   (busqueda, estado, solo_hoy, fecha_inicio, fecha_fin) y orden por
+ *   fecha_pago DESC (mismo formato de respuesta que /api/bitacora).
  *
  * ============================================================================
  */
@@ -74,35 +71,6 @@ export const normalizarTipoPago = (tipo: unknown): string => {
     return mapa[valor] ?? 'Otro';
 };
 
-/** Filtros comunes del listado de pagos (fragmentos SQL parametrizados). */
-const construirWherePagos = (): string => `
-    WHERE 1 = 1
-      AND (@busqueda IS NULL
-           OR LOWER(ISNULL(p.residente, '')) LIKE '%' + LOWER(@busqueda) + '%'
-           OR LOWER(ISNULL(p.concepto, '')) LIKE '%' + LOWER(@busqueda) + '%')
-      AND (@estado IS NULL OR p.estado_pago = @estado)
-      AND (@solo_hoy = 0 OR CAST(p.fecha_pago AS DATE) = CAST(SYSDATETIME() AS DATE))
-      AND (@fecha_inicio IS NULL OR p.fecha_pago >= @fecha_inicio)
-      AND (@fecha_fin IS NULL OR p.fecha_pago < DATEADD(DAY, 1, @fecha_fin))`;
-
-/** Selección equivalente a VW_AdministracionPagos + id_contrato + categoria. */
-const SELECT_PAGOS = `
-    SELECT p.id_pago,
-           ISNULL(p.residente, 'Sin Cédula') AS residente,
-           ISNULL(p.concepto, 'Pago Administrativo') AS concepto,
-           p.monto,
-           p.fecha_pago,
-           p.tipo_pago AS metodo_pago,
-           p.estado_pago AS estado,
-           p.id_reserva,
-           p.id_contrato,
-           CASE
-               WHEN p.id_reserva IS NOT NULL THEN 'Reserva'
-               WHEN p.id_contrato IS NOT NULL THEN 'Contrato'
-               ELSE 'Administrativo'
-           END AS categoria
-    FROM Pago p`;
-
 /**
  * 1. GET /api/pagos
  * Lista TODOS los pagos (reservas + contratos + administrativos) con filtros,
@@ -126,38 +94,37 @@ export const getPagos = async (req: Request, res: Response) => {
         // Paginación segura (mismo patrón que Bitácora/Visitas).
         const pagina = Math.max(1, Math.floor(Number(pageNumber)) || 1);
         const limite = Math.min(LIMITE_MAXIMO, Math.max(1, Math.floor(Number(pageSize)) || LIMITE_DEFECTO));
-        const offset = (pagina - 1) * limite;
 
         const pool = await obtenerPool(req);
-        const where = construirWherePagos();
 
-        const params = (request: sql.Request) => request
+        // sp_ListarPagos: devuelve 2 recordsets → [0] total, [1] datos paginados.
+        // Los mismos filtros que antes (busqueda, estado, solo_hoy, fechas) más
+        // la paginación; el orden (fecha_pago DESC) lo aplica el SP.
+        const resultado = await pool.request()
             .input('busqueda', sql.VarChar(150), busqueda ? String(busqueda) : null)
             .input('estado', sql.VarChar(20), estado ? String(estado) : null)
             .input('solo_hoy', sql.Bit, solo_hoy === 'true' || solo_hoy === '1' ? 1 : 0)
             .input('fecha_inicio', sql.Date, fecha_inicio ? String(fecha_inicio) : null)
-            .input('fecha_fin', sql.Date, fecha_fin ? String(fecha_fin) : null);
+            .input('fecha_fin', sql.Date, fecha_fin ? String(fecha_fin) : null)
+            .input('pageNumber', sql.Int, pagina)
+            .input('pageSize', sql.Int, limite)
+            .execute('sp_ListarPagos');
 
-        // Total de registros con los mismos filtros (para la paginación).
-        const conteo = await params(pool.request())
-            .query(`SELECT COUNT(*) AS total FROM Pago p ${where}`);
+        // mssql tipa `recordsets` como unión (array | diccionario): se normaliza
+        // a array para leer el total (recordset 0) y los datos (recordset 1).
+        const recordsets = Array.isArray(resultado?.recordsets)
+            ? resultado.recordsets
+            : Object.values(resultado?.recordsets ?? {});
 
-        const totalRegistros = Number(conteo?.recordset?.[0]?.total ?? 0);
+        const totalRegistros = Number(recordsets[0]?.[0]?.totalRegistros ?? 0);
         const totalPaginas = Math.max(1, Math.ceil(totalRegistros / limite));
-
-        const resultado = await params(pool.request())
-            .input('offset', sql.Int, offset)
-            .input('limite', sql.Int, limite)
-            .query(`${SELECT_PAGOS} ${where}
-                    ORDER BY p.fecha_pago DESC
-                    OFFSET @offset ROWS FETCH NEXT @limite ROWS ONLY`);
 
         return res.status(200).json({
             pagina,
             limite,
             totalRegistros,
             totalPaginas,
-            datos: resultado?.recordset ?? [],
+            datos: recordsets[1] ?? [],
         });
     } catch (error: unknown) {
         console.error('Error en getPagos:', error);

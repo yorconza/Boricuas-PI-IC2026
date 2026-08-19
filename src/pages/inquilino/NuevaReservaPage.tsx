@@ -27,7 +27,7 @@
  * ============================================================================
  */
 
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useData } from '../../context/DataContext';
 import { useToast } from '../../components/Toast';
 import { formatHoraAMPM, getLocalDateString } from '../../hooks/useLocalDate';
@@ -36,6 +36,12 @@ import { inquilinoService } from '../../services/inquilinoService';
 
 interface NuevaReservaPageProps {
   preselectedAreaId?: number | null;
+}
+
+/** Intervalo ocupado [inicio, fin) con horas 'HH:mm[:ss]' (o 'HH:00'). */
+interface SlotOcupado {
+  inicio: string;
+  fin: string;
 }
 
 export default function NuevaReservaPage({ preselectedAreaId }: NuevaReservaPageProps) {
@@ -55,6 +61,60 @@ export default function NuevaReservaPage({ preselectedAreaId }: NuevaReservaPage
 
   const area = areasDisponiblesData.find(a => a.id === Number(areaId));
 
+  // --- Disponibilidad (horarios ocupados del día) ---
+  // Fuente de verdad: GET /inquilino/areas/:id/horarios (sp_ListarHorariosDisponibles),
+  // que devuelve las reservas ACTIVAS de TODOS los inquilinos (no solo las
+  // propias). Si la API falla (p. ej. el SP aún no existe en la BD), se cae al
+  // respaldo con las reservas propias (comportamiento anterior).
+  const [ocupadosApi, setOcupadosApi] = useState<SlotOcupado[] | null>(null);
+  const ultimaSolicitud = useRef('');
+
+  const cargarOcupados = useCallback(async (idArea: number, fechaSel: string): Promise<void> => {
+    const clave = `${idArea}|${fechaSel}`;
+    ultimaSolicitud.current = clave;
+    try {
+      const ocupados = await inquilinoService.obtenerHorariosOcupados(idArea, fechaSel);
+      if (ultimaSolicitud.current === clave) {
+        setOcupadosApi(ocupados.map(o => ({ inicio: o.hora_inicio, fin: o.hora_fin })));
+      }
+    } catch {
+      if (ultimaSolicitud.current === clave) setOcupadosApi(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    const idNum = Number(areaId);
+    if (!idNum || !fecha) {
+      setOcupadosApi(null);
+      return;
+    }
+    void cargarOcupados(idNum, fecha);
+  }, [areaId, fecha, cargarOcupados]);
+
+  /** Intervalos ocupados efectivos: API (todos los inquilinos) o respaldo propio. */
+  const intervalosOcupados = (): SlotOcupado[] => {
+    if (ocupadosApi) return ocupadosApi;
+    if (!area) return [];
+    // Respaldo: reservas propias. Se excluyen AMBOS estados de cancelación
+    // ('Cancelado' lo escribe sp_CancelarReserva; 'Cancelada' es el de la UI)
+    // para que un horario cancelado vuelva a aparecer disponible.
+    return inquilinoReservasData
+      .filter(r => r.area === area.nombre && r.fecha === fecha && r.estado !== 'Cancelada' && r.estado !== 'Cancelado')
+      .map(r => ({ inicio: r.hora_inicio, fin: r.hora_fin }));
+  };
+
+  /** Horas enteras ocupadas: [inicio, fin) ocupa de `inicio` a `fin - 1`
+   *  (una reserva 10:00-11:00 ocupa la hora 10 y deja libre las 11:00). */
+  const horasOcupadas = (): Set<number> => {
+    const set = new Set<number>();
+    for (const iv of intervalosOcupados()) {
+      const oi = parseInt(iv.inicio.split(':')[0]);
+      const of = parseInt(iv.fin.split(':')[0]);
+      for (let h = oi; h < of; h++) set.add(h);
+    }
+    return set;
+  };
+
   const getHorasDisponibles = () => {
     if (!area) return [];
     const horas: string[] = [];
@@ -69,16 +129,8 @@ export default function NuevaReservaPage({ preselectedAreaId }: NuevaReservaPage
     for (let h = inicio; h < area.horario_fin; h++) {
       horas.push(String(h).padStart(2, '0') + ':00');
     }
-    const ocupadas = inquilinoReservasData
-      .filter(r => r.area === area.nombre && r.fecha === fecha && r.estado !== 'Cancelada')
-      .flatMap(r => {
-        const inicio = parseInt(r.hora_inicio.split(':')[0]);
-        const fin = parseInt(r.hora_fin.split(':')[0]);
-        const o: string[] = [];
-        for (let h = inicio; h <= fin; h++) o.push(String(h).padStart(2, '0') + ':00');
-        return o;
-      });
-    return horas.filter(h => !ocupadas.includes(h));
+    const ocupadas = horasOcupadas();
+    return horas.filter(h => !ocupadas.has(parseInt(h.split(':')[0])));
   };
 
   const getHorasFin = () => {
@@ -86,18 +138,19 @@ export default function NuevaReservaPage({ preselectedAreaId }: NuevaReservaPage
     const inicioNum = parseInt(horaInicio.split(':')[0]);
     const horas: string[] = [];
     for (let h = area.horario_inicio; h < area.horario_fin; h++) {
-      if (h > inicioNum) horas.push(String(h).padStart(2, '0') + ':00');
-    }
-    const ocupadas = inquilinoReservasData
-      .filter(r => r.area === area.nombre && r.fecha === fecha && r.estado !== 'Cancelada')
-      .flatMap(r => {
-        const inicio = parseInt(r.hora_inicio.split(':')[0]);
-        const fin = parseInt(r.hora_fin.split(':')[0]);
-        const o: string[] = [];
-        for (let h = inicio; h <= fin; h++) o.push(String(h).padStart(2, '0') + ':00');
-        return o;
+      if (h <= inicioNum) continue;
+      // Un fin `h` es válido si [inicioNum, h) NO traslapa ningún intervalo
+      // ocupado [oi, of): hay traslape cuando inicioNum < of Y oi < h. Así no
+      // se ofrece 8:00-11:00 si ya existe una reserva 9:00-11:00 (solo se
+      // ofrece 8:00-9:00).
+      const traslapa = intervalosOcupados().some(iv => {
+        const oi = parseInt(iv.inicio.split(':')[0]);
+        const of = parseInt(iv.fin.split(':')[0]);
+        return inicioNum < of && oi < h;
       });
-    return horas.filter(h => !ocupadas.includes(h));
+      if (!traslapa) horas.push(String(h).padStart(2, '0') + ':00');
+    }
+    return horas;
   };
 
   const calcularCosto = () => {
@@ -158,9 +211,12 @@ export default function NuevaReservaPage({ preselectedAreaId }: NuevaReservaPage
       });
 
       await recargarReservasInquilino();
+      // Refrescar los horarios ocupados para que la reserva recién creada
+      // aparezca como ocupada de inmediato.
+      await cargarOcupados(area.id, fecha);
       document.getElementById('confirmarPagoModal')?.classList.remove('open');
       showToast(`Reserva de ${area.nombre} confirmada. Pago de ${formatearMoneda(resp.monto)} con ${metodoTexto} registrado.`, 'success');
-      addNotification('inquilino', 'Reserva confirmada', `Tu reserva de ${area.nombre} ha sido confirmada.`);
+      addNotification('inquilino', 'Reserva confirmada', `Tu reserva de ${area.nombre} ha sido confirmada.`, 'fa-calendar-check', resp.id_reserva ?? null);
       setHoraInicio('');
       setHoraFin('');
       setPersonas(1);

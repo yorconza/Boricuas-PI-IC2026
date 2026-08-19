@@ -1,3 +1,22 @@
+/**
+ * ============================================================================
+ * Archivo: dashboardController.ts
+ * ============================================================================
+ *
+ * ¿Qué hace?
+ * Controller del Dashboard del Administrador. Devuelve el resumen ejecutivo
+ * (KPIs, próximas reservas, alertas, actividad reciente) en una sola llamada.
+ *
+ * Endpoint:
+ *   GET /api/dashboard → dashboardService.obtenerResumen(id_usuario)
+ *
+ * Se comunica con:
+ *   - dashboardService.ts (sp_Dashboard_ObtenerDatos → 4 recordsets).
+ *   - Ruta: dashboardRoute.ts.
+ *   - Frontend: AdminDashboard.tsx.
+ *
+ * ============================================================================
+ */
 import { type Request, type Response } from 'express';
 import { dashboardService } from '../services/dashboardService.js';
 

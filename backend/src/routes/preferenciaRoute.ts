@@ -1,3 +1,24 @@
+/**
+ * ============================================================================
+ * Archivo: preferenciaRoute.ts
+ * ============================================================================
+ *
+ * ¿Qué hace?
+ * Define las rutas del módulo de Preferencias (montadas en /api/preferencias
+ * desde server.ts):
+ *
+ *   GET   /api/preferencias → sp_ObtenerPreferencias
+ *   PATCH /api/preferencias → sp_ActualizarPreferencias
+ *
+ * Protección: JWT → 2FA → sesión + SET CONTEXT_INFO (sin authorizeRole:
+ * aplica a cualquier rol autenticado).
+ *
+ * Se comunica con:
+ *   - preferenciaController.ts (handler de cada ruta).
+ *   - server.ts (montaje en /api/preferencias).
+ *
+ * ============================================================================
+ */
 import { Router } from 'express';
 import { getPreferencias, actualizarPreferencias } from '../controllers/preferenciaController.js';
 
