@@ -27,7 +27,7 @@
  * ============================================================================
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import PageHeader from '../../components/PageHeader';
 import Drawer from '../../components/Drawer';
 import Modal from '../../components/Modal';
@@ -37,7 +37,7 @@ import { formatearTelefono, formatearCedula, validarTelefono, validarCedula, val
 import type { Personal } from '../../types';
 
 export default function PersonalPage() {
-  const { personalData, addActivity, addNotification, crearPersonal, editarPersonal, cambiarEstadoPersonal } = useData();
+  const { personalData, recargarPersonal, addActivity, addNotification, crearPersonal, editarPersonal, cambiarEstadoPersonal } = useData();
   const { showAlert } = useAlert();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState<'create' | 'view' | 'edit'>('create');
@@ -45,6 +45,19 @@ export default function PersonalPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteItem, setDeleteItem] = useState<Personal | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [busqueda, setBusqueda] = useState('');
+  const busquedaTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Búsqueda con debounce (500ms) — evita una petición por cada tecla
+  useEffect(() => {
+    if (busquedaTimerRef.current) clearTimeout(busquedaTimerRef.current);
+    busquedaTimerRef.current = setTimeout(() => {
+      recargarPersonal(busqueda);
+    }, 500);
+    return () => {
+      if (busquedaTimerRef.current) clearTimeout(busquedaTimerRef.current);
+    };
+  }, [busqueda, recargarPersonal]);
 
   // Estado controlado del formulario (se limpia al abrir en modo crear)
   const [form, setForm] = useState({
@@ -324,6 +337,24 @@ export default function PersonalPage() {
           <span className="badge badge-domain">@admin.com → Administrador</span>
           <span className="badge badge-domain">@guardia.com → Guarda</span>
         </div>
+      </div>
+
+      <div className="visitas-filters">
+        <div className="filter-group">
+          <label htmlFor="personalSearch">Buscar</label>
+          <input
+            type="text"
+            id="personalSearch"
+            placeholder="Nombre o cédula..."
+            value={busqueda}
+            onChange={e => setBusqueda(e.target.value)}
+          />
+        </div>
+        {busqueda && (
+          <button className="btn-secondary" onClick={() => setBusqueda('')}>
+            <i className="fas fa-undo"></i> Limpiar
+          </button>
+        )}
       </div>
 
       <table className="table-modern">

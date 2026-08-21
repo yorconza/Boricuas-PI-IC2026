@@ -9,8 +9,8 @@
  *
  *   GET /api/dashboard → dashboardController.getDashboardSummary
  *
- * Protección: JWT → 2FA (sin validateSessionAndSetContext por simplicidad;
- * el SP valida el rol internamente).
+ * Protección: JWT → 2FA → sesión + SET CONTEXT_INFO (el SP valida el rol
+ * internamente).
  *
  * Se comunica con:
  *   - dashboardController.ts → dashboardService.ts → sp_Dashboard_ObtenerDatos.
@@ -22,10 +22,14 @@
 import { Router } from 'express';
 import { getDashboardSummary } from '../controllers/dashboardController.js';
 import { authenticateToken, require2FA } from '../middlewares/auth.js';
+import { validateSessionAndSetContext } from '../middlewares/session.js';
 
 const router = Router();
 
+// Cadena de protección estándar (sin authorizeRole: el SP valida el rol).
+const proteger = [authenticateToken, require2FA, validateSessionAndSetContext];
+
 // ✅ Cambia '/summary' por '/'
-router.get('/', authenticateToken, require2FA, getDashboardSummary);
+router.get('/', proteger, getDashboardSummary);
 
 export default router;

@@ -29,7 +29,7 @@
 import { type Request, type Response } from 'express';
 import { getConnection } from '../config/confDB.js';
 import sql from 'mssql';
-import { getFechaActualDB } from '../services/timezoneService.js';
+import { getFechaActualDB, getHoraActualDB } from '../services/timezoneService.js';
 
 // 1. Registrar visitante (sp_RegistrarVisitante)
 // POST /api/inquilino/visitantes
@@ -51,11 +51,27 @@ export const registrarVisitante = async (req: Request, res: Response) => {
 
         let horaEsperadaCompleta: string | null = null;
         if (hora_esperada) {
-            // Usa la zona horaria de la BD (no la del host) para construir
-            // la fecha. Esto asegura consistencia con GETDATE()/SYSDATETIME()
-            // en el SP, tanto en SQL local como en Docker (que usa UTC).
-            const fecha = getFechaActualDB();
-            horaEsperadaCompleta = `${fecha} ${hora_esperada}:00`;
+            // Construye el DateTime completo combinando la fecha actual de la BD
+            // con la hora esperada. Si la hora ya pasó hoy, se asume que el
+            // inquilino quiere programarla para mañana (auto-suma de día).
+            const fechaHoy = getFechaActualDB();
+            const horaActual = getHoraActualDB(); // HH:mm:ss
+            const partes = hora_esperada.split(':');
+            const hora = Number(partes[0] ?? 0);
+            const minuto = Number(partes[1] ?? 0);
+            const partesAct = horaActual.split(':');
+            const hAct = Number(partesAct[0] ?? 0);
+            const mAct = Number(partesAct[1] ?? 0);
+
+            let fechaVisita = fechaHoy;
+            // Si la hora esperada es menor o igual a la hora actual, es para mañana
+            if (hora < hAct || (hora === hAct && minuto <= mAct)) {
+                const fechaObj = new Date(`${fechaHoy}T12:00:00`);
+                fechaObj.setDate(fechaObj.getDate() + 1);
+                fechaVisita = `${fechaObj.getFullYear()}-${String(fechaObj.getMonth() + 1).padStart(2, '0')}-${String(fechaObj.getDate()).padStart(2, '0')}`;
+            }
+
+            horaEsperadaCompleta = `${fechaVisita} ${hora_esperada}:00`;
         }
 
         const pool = await getConnection();

@@ -41,6 +41,8 @@ export interface VisitanteInquilinoRaw {
   placa: string | null;
   /** ISO string (DATETIME) o null si aún no se definió hora esperada */
   hora_esperada: string | null;
+  /** Alias que devuelve el SP en algunas versiones */
+  fecha_hora_estimada?: string | null;
   fecha_autorizacion?: string | null;
   estado: string;
   motivo_rechazo?: string | null;

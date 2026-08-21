@@ -81,16 +81,13 @@ const esErrorClaveDuplicada = (error: unknown): boolean => {
     return e.number === 2601 || e.number === 2627;
 };
 
-// 1. Listar personal (Acepta opcionalmente un id_usuario y requiere el id_usuario_actual por seguridad)
+// 1. Listar personal con búsqueda por nombre o cédula
 export const getPersonal = async (req: Request, res: Response) => {
     try {
-        const { id_usuario_actual, id_usuario } = req.query;
+        const { busqueda } = req.query;
 
-        // SEGURIDAD (cambio): con las rutas protegidas por JWT, el id_usuario_actual
-        // se toma del token firmado (req.user), NO del cliente. Así un atacante no
-        // puede suplantar a otro administrador inventando un id en el query.
-        // El fallback al query solo existe por compatibilidad con llamadas sin token.
-        const idActual = req.user?.id_usuario ?? (Number.isFinite(Number(id_usuario_actual)) ? Number(id_usuario_actual) : undefined);
+        // SEGURIDAD: id_usuario_actual se toma del token firmado (req.user).
+        const idActual = req.user?.id_usuario;
         if (!idActual) {
             return res.status(400).json({ message: 'id_usuario_actual es obligatorio' });
         }
@@ -98,7 +95,7 @@ export const getPersonal = async (req: Request, res: Response) => {
         const pool = await getConnection();
         const result = await pool?.request()
             .input('id_usuario_actual', sql.Int, idActual)
-            .input('id_usuario', sql.Int, id_usuario ? Number(id_usuario) : null)
+            .input('busqueda', sql.VarChar(150), busqueda ? String(busqueda).trim() : null)
             .execute('sp_Personal_Listar');
 
         return res.status(200).json(result?.recordset);
