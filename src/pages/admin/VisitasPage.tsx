@@ -436,13 +436,15 @@ export default function VisitasPage() {
         </button>
       </div>
 
-      {/* Encabezado de la pestaña activa */}
-      <div className="visitas-header">
-        <h3>{activeTab === 'hoy' ? 'Visitas de hoy' : 'Historial de visitas'}</h3>
-        <div className="visitas-fecha" id="visitasFechaActual">
-          {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+      {/* Encabezado solo en pestaña Hoy */}
+      {activeTab === 'hoy' && (
+        <div className="visitas-header">
+          <h3>Visitas de hoy</h3>
+          <div className="visitas-fecha" id="visitasFechaActual">
+            {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Barra de filtros (comparte los estilos de .history-filters) */}
       <div className="visitas-filters" id="visitasFiltros">

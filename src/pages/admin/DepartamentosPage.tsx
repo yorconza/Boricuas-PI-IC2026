@@ -9,7 +9,7 @@
  * ============================================================================
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import PageHeader from '../../components/PageHeader';
 import Drawer from '../../components/Drawer';
 import Modal from '../../components/Modal';
@@ -20,6 +20,7 @@ import type { Departamento } from '../../types';
 export default function DepartamentosPage() {
   const {
     departamentosData,
+    recargarDepartamentos,
     crearDepartamento,
     editarDepartamento,
     cambiarEstadoDepartamento,
@@ -42,6 +43,23 @@ export default function DepartamentosPage() {
   const [piso, setPiso] = useState<number | null>(null);
   const [metrosCuadrados, setMetrosCuadrados] = useState<number | null>(null);
   const [cargando, setCargando] = useState(false);
+
+  // Auto-refresh cada 30s + al volver a enfocar la ventana
+  useEffect(() => {
+    const timer = setInterval(() => {
+      void recargarDepartamentos();
+    }, 30_000);
+
+    const onFocus = () => {
+      void recargarDepartamentos();
+    };
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [recargarDepartamentos]);
 
   const resetForm = () => {
     setNumero('');

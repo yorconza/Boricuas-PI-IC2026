@@ -342,6 +342,16 @@ export default function ReservasPage() {
         </button>
       </div>
 
+      {/* Encabezado solo en pestaña Hoy */}
+      {activeTab === 'hoy' && (
+        <div className="visitas-header">
+          <h3>Reservas de hoy</h3>
+          <div className="visitas-fecha">
+            {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          </div>
+        </div>
+      )}
+
       {/* Barra de filtros (comparte los estilos de .visitas-filters) */}
       <div className="visitas-filters">
         <div className="filter-group">

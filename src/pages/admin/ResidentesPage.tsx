@@ -4,7 +4,7 @@
  * ============================================================================
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import PageHeader from '../../components/PageHeader';
 import Drawer from '../../components/Drawer';
 import Modal from '../../components/Modal';
@@ -16,6 +16,7 @@ import type { Residente } from '../../types';
 export default function ResidentesPage() {
   const { 
     residentesData, 
+    recargarResidentes,
     crearResidente, 
     editarResidente, 
     cambiarEstadoResidente, 
@@ -43,6 +44,23 @@ export default function ResidentesPage() {
     estado: 'Activo',
   });
   const [showPassword, setShowPassword] = useState(false);
+
+  // Auto-refresh cada 30s + al volver a enfocar la ventana
+  useEffect(() => {
+    const timer = setInterval(() => {
+      void recargarResidentes();
+    }, 30_000);
+
+    const onFocus = () => {
+      void recargarResidentes();
+    };
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [recargarResidentes]);
 
   const setCampo = (campo: keyof typeof form, valor: string) => {
     setForm(prev => ({ ...prev, [campo]: valor }));

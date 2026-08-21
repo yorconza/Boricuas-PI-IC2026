@@ -30,10 +30,22 @@ export default function AdminDashboard({ onNavigate }: AdminDashboardProps) {
   // lleva a la pantalla completa (ActividadPage) con el resto y el botón Volver.
   const ACTIVIDAD_VISIBLE_MAX = 6;
 
+  // Auto-refresh cada 30s + al volver a enfocar la ventana
   useEffect(() => {
-    recargarDashboard();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Se ejecuta una sola vez al entrar para evitar bucles de renderizado
+    const timer = setInterval(() => {
+      void recargarDashboard();
+    }, 30_000);
+
+    const onFocus = () => {
+      void recargarDashboard();
+    };
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [recargarDashboard]);
 
   if (!dashboardData) {
     return <p style={{ color: 'var(--text-muted)', padding: 'var(--space-4)' }}>Cargando dashboard...</p>;

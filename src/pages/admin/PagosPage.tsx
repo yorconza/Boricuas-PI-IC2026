@@ -197,6 +197,25 @@ export default function PagosPage() {
   useEffect(() => {
     void cargarMetricas();
   }, [cargarMetricas]);
+
+  // Auto-refresh cada 30s + al volver a enfocar la ventana
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setRefresco(prev => prev + 1);
+      void cargarMetricas();
+    }, 30_000);
+
+    const onFocus = () => {
+      setRefresco(prev => prev + 1);
+      void cargarMetricas();
+    };
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [cargarMetricas]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   // Páginas a mostrar (ventana alrededor de la actual, patrón Bitácora)

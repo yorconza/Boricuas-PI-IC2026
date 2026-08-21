@@ -199,8 +199,8 @@ export const crearNotificacion = async (req: Request, res: Response) => {
         const pool = await obtenerPool(req);
         await pool.request()
             .input('id_usuario', sql.Int, idActual)
-            .input('tipo', sql.VarChar(30), String(tipo).slice(0, 30))
-            .input('mensaje', sql.VarChar(500), String(mensaje).slice(0, 500))
+            .input('tipo', sql.NVarChar(30), String(tipo).slice(0, 30))
+            .input('mensaje', sql.NVarChar(500), String(mensaje).slice(0, 500))
             .input('id_referencia', sql.Int, id_referencia != null ? Number(id_referencia) : null)
             .execute('sp_CrearNotificacion');
 

@@ -238,6 +238,7 @@ export default function BitacoraPage() {
   const [totalPaginas, setTotalPaginas] = useState(1);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
+  const [refresco, setRefresco] = useState(0);
 
   // Detalle (modal)
   const [detalle, setDetalle] = useState<BitacoraRegistro | null>(null);
@@ -317,7 +318,24 @@ export default function BitacoraPage() {
     return () => {
       activo = false;
     };
-  }, [filtros, pagina, limite]);
+  }, [filtros, pagina, limite, refresco]);
+
+  // Auto-refresh cada 60s (menos frecuente: es historical) + al volver a enfocar
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setRefresco(prev => prev + 1);
+    }, 60_000);
+
+    const onFocus = () => {
+      setRefresco(prev => prev + 1);
+    };
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, []);
 
   // Cerrar el modal de detalle con la tecla Escape (convención del proyecto)
   useEffect(() => {
