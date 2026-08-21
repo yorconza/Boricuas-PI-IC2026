@@ -56,22 +56,20 @@ export default function RegistrarVisitantePage() {
     setDocumento(/^[\d-]*$/.test(valor) ? formatearCedula(valor) : valor);
   };
 
+  /** Detecta si la hora elegida ya pasó hoy (se programará para mañana). */
+  const esParaManana = (): boolean => {
+    if (!horaEsperada) return false;
+    const ahora = new Date();
+    const [h, m] = horaEsperada.split(':').map(Number);
+    const fechaHora = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate(), h, m);
+    return fechaHora.getTime() < ahora.getTime();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nombre || !documento) {
       showToast('Nombre y documento son obligatorios.', 'error');
       return;
-    }
-
-    // Hora esperada no puede ser una hora que ya pasó hoy
-    if (horaEsperada) {
-      const ahora = new Date();
-      const [h, m] = horaEsperada.split(':').map(Number);
-      const fechaHora = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate(), h, m);
-      if (fechaHora.getTime() < ahora.getTime()) {
-        showToast('La hora esperada no puede ser anterior a la hora actual.', 'error');
-        return;
-      }
     }
 
     // Placa opcional: si se llenó, debe cumplir el formato ABC-123
@@ -146,6 +144,11 @@ export default function RegistrarVisitantePage() {
           <div className="form-group">
             <label htmlFor="visitanteHoraEsperada">Hora esperada</label>
             <input type="time" id="visitanteHoraEsperada" value={horaEsperada} onChange={e => setHoraEsperada(e.target.value)} />
+            {esParaManana() && (
+              <small style={{ color: 'var(--accent)', fontSize: '0.8rem', marginTop: '4px', display: 'block' }}>
+                <i className="fas fa-info-circle"></i> Se programará para mañana
+              </small>
+            )}
           </div>
           <button type="submit" className="btn-primary" disabled={enviando} style={{ width: '100%', justifyContent: 'center', marginTop: 'var(--space-2)' }}>
             {enviando ? 'Registrando...' : 'Registrar visitante'}

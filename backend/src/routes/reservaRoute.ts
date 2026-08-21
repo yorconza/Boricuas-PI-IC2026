@@ -10,7 +10,6 @@
  *   GET /api/reservas            → sp_ConsultarHistorial (listado completo)
  *   GET /api/reservas/hoy        → sp_ListarReservas (solo del día)
  *   GET /api/reservas/historial  → sp_ConsultarHistorial (paginado)
- *   GET /api/reservas/estadisticas → sp_EstadisticasMensuales
  *
  * No hay POST/PUT/PATCH: la creación y cancelación de reservas es del
  * inquilino (POST/PATCH /api/inquilino/reservas).
@@ -26,7 +25,6 @@
 import { Router } from 'express';
 import {
     getReservasHoy,
-    getEstadisticasMensuales,
     getHistorialReservas,
     getHistorialReservasPaginado
 } from '../controllers/reservaController.js';
@@ -54,9 +52,6 @@ reserva.get('/hoy', protegerAdmin, getReservasHoy);
 // GET /api/reservas/historial -> Historial paginado (mismo formato que
 // /api/visitas/historial: { pagina, limite, totalRegistros, totalPaginas, datos })
 reserva.get('/historial', protegerAdmin, getHistorialReservasPaginado);
-
-// GET /api/reservas/estadisticas -> Estadísticas para los KPI
-reserva.get('/estadisticas', protegerAdmin, getEstadisticasMensuales);
 
 // 2. Ruta dinámica GET con :id
 // reserva.get('/:id', protegerAdmin, getDetalleReserva);

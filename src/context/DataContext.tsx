@@ -189,7 +189,7 @@ interface DataContextType {
 
   // Personal CRUD (los crear* devuelven el id nuevo para el id_referencia de
   // la notificación; null si el backend no lo reporta).
-  recargarPersonal: () => Promise<void>;
+  recargarPersonal: (busqueda?: string) => Promise<void>;
   crearPersonal: (nombre: string, correo: string, contrasena: string, telefono: string, cedula: string, correoContacto?: string) => Promise<number | null>;
   editarPersonal: (id_usuario: number, nombre: string, correo: string, telefono: string, cedula: string, correoContacto?: string) => Promise<void>;
   cambiarEstadoPersonal: (id_usuario: number, activar: boolean) => Promise<void>;
@@ -358,7 +358,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
         nombre: v.nombre_completo,
         documento: v.documento_identidad,
         placa: v.placa ?? '',
-        hora_esperada: v.hora_esperada ? toTimeOnly(v.hora_esperada) : '',
+        // El SP puede devolver hora_esperada o fecha_hora_estimada según la versión
+        hora_esperada: toTimeOnly(v.hora_esperada ?? (v as Record<string, unknown>).fecha_hora_estimada as string ?? ''),
         estado: v.estado,
         motivo_rechazo: v.motivo_rechazo ?? undefined,
       }));
@@ -420,10 +421,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [idAdminActual]);
 
   // --- Personal CRUD ---
-  const recargarPersonal = useCallback(async () => {
+  const recargarPersonal = useCallback(async (busqueda?: string) => {
     if (!idAdminActual) return;
     try {
-      const data = await api.get<PersonalRaw[]>('/personal');
+      const params = busqueda?.trim() ? `?busqueda=${encodeURIComponent(busqueda.trim())}` : '';
+      const data = await api.get<PersonalRaw[]>(`/personal${params}`);
 
       if (!Array.isArray(data)) {
         console.error('Error del backend al obtener personal:', data);

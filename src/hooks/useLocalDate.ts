@@ -83,7 +83,17 @@ export function toDateOnly(fecha: string): string {
  */
 export function toTimeOnly(hora: string): string {
   if (!hora) return '';
-  if (!hora.includes('T')) return hora;
+  // Si ya viene como "HH:mm:ss" o "HH:mm" (sin espacio ni T), devolver tal cual
+  if (/^\d{2}:\d{2}(:\d{2})?$/.test(hora)) return hora;
+  // Si viene como DATETIME con espacio (SQL Server: "2026-08-22 00:00:00.0000000")
+  // o ISO con T ("2026-08-22T00:00:00.000Z"), extraer solo la parte de hora
+  if (hora.includes(' ')) {
+    const partes = hora.split(' ');
+    const tiempo = partes[partes.length - 1]; // "00:00:00.0000000"
+    // Quitar milisegundos si existen
+    const sinMs = tiempo.split('.')[0]; // "00:00:00"
+    return sinMs || hora;
+  }
   const d = new Date(hora);
   if (isNaN(d.getTime())) return hora;
   const h = String(d.getUTCHours()).padStart(2, '0');

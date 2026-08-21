@@ -10,7 +10,6 @@
  *   getReservasHoy              → sp_ListarReservas (reservas del día)
  *   getHistorialReservas        → sp_ConsultarHistorial (filtros completos, sin paginación)
  *   getHistorialReservasPaginado → sp_ConsultarHistorial (con paginación OFFSET-FETCH)
- *   getEstadisticasMensuales    → sp_EstadisticasMensuales (KPIs)
  *
  * Auto-finalización (lazy):
  *   - Antes de cada listado, sp_FinalizarReservasVencidas actualiza las
@@ -204,31 +203,3 @@ export const getHistorialReservasPaginado = async (req: Request, res: Response) 
     }
 };
 
-// 4. Estadísticas mensuales de reservas (sp_EstadisticasMensuales)
-export const getEstadisticasMensuales = async (req: Request, res: Response) => {
-    try {
-        const { id_usuario_actual, anio, mes } = req.query;
-
-        // SEGURIDAD (cambio): con las rutas protegidas por JWT, el id_usuario_actual
-        // se toma del token firmado (req.user), NO del cliente. Así un atacante no
-        // puede suplantar a otro administrador inventando un id en el query.
-        // El fallback al query solo existe por compatibilidad con llamadas sin token.
-        const idActual = req.user?.id_usuario ?? (Number.isFinite(Number(id_usuario_actual)) ? Number(id_usuario_actual) : undefined);
-        if (!idActual) {
-            return res.status(400).json({ message: 'id_usuario_actual es obligatorio' });
-        }
-
-        const pool = await getConnection();
-        const result = await pool?.request()
-            .input('id_usuario_actual', sql.Int, idActual)
-            .input('anio', sql.Int, Number(anio))
-            .input('mes', sql.Int, mes ? Number(mes) : null)
-            .execute('sp_EstadisticasMensuales');
-
-        return res.status(200).json(result?.recordset);
-    } catch (error: unknown) {
-        console.error("Error:", error);
-        const err = error as Error;
-        return res.status(400).json({ message: err.message || "Error interno del servidor" });
-    }
-};
