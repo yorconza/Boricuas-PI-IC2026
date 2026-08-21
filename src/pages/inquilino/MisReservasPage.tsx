@@ -41,7 +41,7 @@
  * ============================================================================
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useData } from '../../context/DataContext';
 import { useToast } from '../../components/Toast';
 import { useAlert } from '../../components/Alert';
@@ -54,6 +54,23 @@ export default function MisReservasPage() {
   const { showToast } = useToast();
   const { confirmar } = useAlert();
   const [cancelandoId, setCancelandoId] = useState<number | null>(null);
+
+  // Auto-refresh cada 30s + al volver a enfocar la ventana
+  useEffect(() => {
+    const timer = setInterval(() => {
+      void recargarReservasInquilino();
+    }, 30_000);
+
+    const onFocus = () => {
+      void recargarReservasInquilino();
+    };
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [recargarReservasInquilino]);
 
   // Fecha actual local en "YYYY-MM-DD" (getLocalDateString). Comparar por
   // string evita el bug de zona horaria: `new Date("YYYY-MM-DD")` se interpreta

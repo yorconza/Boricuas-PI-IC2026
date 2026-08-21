@@ -96,6 +96,23 @@ export default function MisContratosPage() {
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [cargarContratos]);
 
+  // Auto-refresh cada 30s + al volver a enfocar la ventana
+  useEffect(() => {
+    const timer = setInterval(() => {
+      void cargarContratos();
+    }, 30_000);
+
+    const onFocus = () => {
+      void cargarContratos();
+    };
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [cargarContratos]);
+
   /** Abre la pasarela de pago con el monto mensual pre-cargado. */
   const abrirPago = (contrato: ContratoInquilino) => {
     setContratoPago(contrato);

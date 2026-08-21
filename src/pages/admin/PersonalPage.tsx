@@ -59,6 +59,23 @@ export default function PersonalPage() {
     };
   }, [busqueda, recargarPersonal]);
 
+  // Auto-refresh cada 30s + al volver a enfocar la ventana
+  useEffect(() => {
+    const timer = setInterval(() => {
+      void recargarPersonal(busqueda);
+    }, 30_000);
+
+    const onFocus = () => {
+      void recargarPersonal(busqueda);
+    };
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [busqueda, recargarPersonal]);
+
   // Estado controlado del formulario (se limpia al abrir en modo crear)
   const [form, setForm] = useState({
     nombre: '',
