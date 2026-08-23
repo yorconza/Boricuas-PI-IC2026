@@ -241,11 +241,11 @@ export class PdfService {
     let y = 115;
     doc.fillColor('#0f172a').fontSize(10).font('Helvetica-Bold');
     doc.text('Residente', 40, y);
-    doc.text('Concepto', 150, y);
-    doc.text('Fecha', 280, y);
-    doc.text('Método', 370, y);
-    doc.text('Monto', 450, y);
-    doc.text('Estado', 500, y);
+    doc.text('Concepto', 140, y);
+    doc.text('Fecha', 260, y);
+    doc.text('Método', 340, y);
+    doc.text('Monto', 420, y);
+    doc.text('Estado', 490, y);
 
     y += 15;
     doc.moveTo(40, y).lineTo(555, y).strokeColor('#cbd5e1').stroke();
@@ -259,27 +259,20 @@ export class PdfService {
         y = 40;
       }
 
-      // FIX (columnas del reporte): sp_ReportePagos devuelve `fecha_pago` y
-      // `metodo_pago`, pero el generador leía `fecha`/`metodo` → columnas
-      // vacías en el PDF. Ahora se aceptan ambos nombres (y variantes de la
-      // vista, ej. monto/monto_pagado) vía obtenerCampo, sin tocar el SP.
       const residente = String(this.obtenerCampo(item, 'residente', 'nombre') ?? '-');
       const concepto = String(this.obtenerCampo(item, 'concepto', 'descripcion') ?? '-');
       const montoNum = Number(this.obtenerCampo(item, 'monto', 'monto_pagado', 'total') ?? 0) || 0;
       const montoFormateado = montoNum.toLocaleString('en-US');
-      const fechaRaw = this.obtenerCampo(item, 'fecha_pago', 'fecha');
-      const fechaStr = fechaRaw instanceof Date
-        ? fechaRaw.toLocaleDateString()
-        : String(fechaRaw ?? '-');
+      const fechaStr = this.formatearFechaReporte(this.obtenerCampo(item, 'fecha_pago', 'fecha'));
       const metodo = String(this.obtenerCampo(item, 'metodo_pago', 'metodo', 'tipo_pago') ?? '-');
       const estado = String(this.obtenerCampo(item, 'estado', 'estado_pago') ?? '-');
 
       doc.text(residente, 40, y);
-      doc.text(concepto, 150, y);
-      doc.text(fechaStr, 280, y);
-      doc.text(metodo, 370, y);
-      doc.text(montoFormateado, 450, y);
-      doc.text(estado, 500, y);
+      doc.text(concepto, 140, y);
+      doc.text(fechaStr, 260, y);
+      doc.text(metodo, 340, y);
+      doc.text(montoFormateado, 420, y);
+      doc.text(estado, 490, y);
 
       y += 20;
     });

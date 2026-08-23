@@ -1,11 +1,17 @@
-# 🏢 Condominium — Sistema de Gestión de Condominios
+<div align="center">
+
+<img src="https://raw.githubusercontent.com/reactjs/reactjs.org/main/public/logo192.png" alt="React Logo" width="120" />
+
+# Condominium — Sistema de Gestión de Condominios
 
 App web **React + TypeScript + Vite** con backend **Node.js + Express + SQL Server**.
 Tres paneles según rol: **Administrador**, **Guarda** e **Inquilino**.
 
+</div>
+
 ---
 
-## 🚀 Inicio rápido
+## Inicio rápido
 
 ```bash
 # Instalar dependencias
@@ -13,30 +19,31 @@ npm install
 cd backend && npm install
 
 # Ejecutar (en terminales separadas)
-npm run dev          # Frontend → http://localhost:5173
-cd backend && npm run dev   # Backend → http://localhost:4000
+npm run dev                    # Frontend → http://localhost:5173
+cd backend && npm run dev      # Backend  → http://localhost:4000
 ```
 
-> ⚠️ El frontend necesita el backend corriendo. Variables de entorno en `backend/.env`.
+> El frontend necesita el backend corriendo. Variables de entorno en `backend/.env`.
 
-### ⏰ SQL Server en Docker
+### SQL Server en Docker
 
-Si usas SQL Server en Docker (UTC), debes configurar la zona horaria para que las fechas/horas funcionen correctamente. Ver **`DOCKER.md`** para instrucciones detalladas.
+Si usas SQL Server en Docker (UTC), configura la zona horaria:
 
 ```bash
-# Ejemplo rápido:
-docker run -e "ACCEPT_EULA=Y" -e "SA_PASSWORD=TuContraseña123!" \
-           -e "TZ=America/Costa_Rica" -p 1433:1433 -d mcr.microsoft.com/mssql/server:latest
+docker run -e "ACCEPT_EULA=Y" -e "SA_PASSWORD=TuContraseña" \
+  -e "TZ=America/Costa_Rica" -p 1433:1433 -d mcr.microsoft.com/mssql/server:latest
 ```
+
+Ver `DOCKER.md` para más detalles.
 
 ---
 
-## 📁 Estructura
+## Estructura
 
 ```
 src/
 ├── components/       # Componentes reutilizables (Modal, Alert, Navbar, etc.)
-├── context/          # Estado global (AuthContext, DataContext, ThemeContext)
+├── context/          # Estado global (AuthContext, DataContext, PreferenciasContext)
 ├── hooks/            # Hooks personalizados (fechas, autenticación)
 ├── pages/            # Pantallas organizadas por rol
 │   ├── admin/        # Panel de Administrador
@@ -51,7 +58,7 @@ src/
 
 ---
 
-## 🧪 Pruebas
+## Pruebas
 
 ```bash
 npm test             # Ejecutar una vez
@@ -62,7 +69,7 @@ npm run lint         # Verificar estilo
 
 ---
 
-## 🔐 Autenticación
+## Autenticación
 
 ```
 Login → JWT temporal → 2FA por correo (6 dígitos, 5 min) → JWT definitivo
@@ -74,15 +81,15 @@ Login → JWT temporal → 2FA por correo (6 dígitos, 5 min) → JWT definitivo
 
 ---
 
-## 📄 Documentación
+## Documentación
 
-- **`DOCKER.md`** — Configuración de SQL Server en Docker (zona horaria)
 - **`backend/README.md`** — API, endpoints, módulos y SPs
-- **`DOCUMENTACION-CAMBIOS.md`** — Historial de cambios
+- **`DOCKER.md`** — Configuración de SQL Server en Docker (zona horaria)
+- **`DOCUMENTACION-CAMBIOS.md`** — Gotchas, objetos de BD, seguridad y reglas de negocio
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Frontend | Backend |
 |----------|---------|

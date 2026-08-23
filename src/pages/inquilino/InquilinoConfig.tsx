@@ -26,24 +26,12 @@ import { usePreferencias } from '../../context/PreferenciasContext';
 import PageHeader from '../../components/PageHeader';
 
 export default function InquilinoConfig() {
-  const { tema, idioma, fuente, tamanoFuente, setTema, setIdioma, setFuente, setTamanoFuente } = usePreferencias();
+  const { tema, fuente, tamanoFuente, setTema, setFuente, setTamanoFuente } = usePreferencias();
 
   return (
     <>
       <PageHeader title="Configuración" />
       <div className="settings-grid">
-        <div className="settings-card">
-          <h4>Idioma y región</h4>
-          <div className="setting-item">
-            <span className="setting-label">Idioma</span>
-            <div className="setting-control">
-              <select id="langSelect" value={idioma} onChange={e => setIdioma(e.target.value as 'es' | 'en')}>
-                <option value="es">Español</option>
-                <option value="en">English</option>
-              </select>
-            </div>
-          </div>
-        </div>
         <div className="settings-card">
           <h4>Apariencia</h4>
           <div className="setting-item">
