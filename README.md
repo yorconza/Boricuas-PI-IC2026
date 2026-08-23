@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/reactjs/reactjs.org/main/public/logo192.png" alt="React Logo" width="120" />
+<img src="https://images.icon-icons.com/2699/PNG/512/reactjs_logo_icon_170805.png" alt="React Logo" width="120" />
 
 # Condominium — Sistema de Gestión de Condominios
 
