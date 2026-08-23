@@ -142,16 +142,14 @@ export default function ReportesPage() {
       <div className="reports-grid">
         {reportes.map(r => (
           <div key={r.tipo} className="report-card">
-            <h4>{r.titulo}</h4>
-            <p>{r.desc}</p>
-            <div className="report-actions">
-              <select defaultValue="PDF">
-                <option>PDF</option>
-              </select>
-              <button className="btn-primary" onClick={() => generarReporte(r.tipo)}>
-                Generar
-              </button>
+            <div className="report-card-header">
+              <h4>{r.titulo}</h4>
+              <span className="badge">PDF</span>
             </div>
+            <p>{r.desc}</p>
+            <button className="btn-primary report-btn-full" onClick={() => generarReporte(r.tipo)}>
+              Generar
+            </button>
           </div>
         ))}
       </div>

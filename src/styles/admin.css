@@ -452,6 +452,8 @@
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
     padding: var(--space-4);
+    display: flex;
+    flex-direction: column;
     transition: transform var(--transition-smooth), border-color var(--transition-smooth);
 }
 .report-card:hover {
@@ -466,35 +468,41 @@
     font-size: 0.8rem;
     color: var(--text-secondary);
     margin-bottom: var(--space-3);
+    flex: 1;
 }
-.report-card .report-actions {
+.report-card-header {
     display: flex;
-    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
     gap: var(--space-2);
+    margin-bottom: var(--space-1);
+    min-height: 1.6rem;
 }
-.report-card .report-actions select,
-.report-card .report-actions button {
-    background: var(--bg-input);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-sm);
-    padding: var(--space-1) var(--space-2);
-    color: var(--text-primary);
-    font-size: 0.75rem;
-    cursor: pointer;
-    transition: border var(--transition-fast);
+.report-card-header h4 {
+    margin: 0;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
-.report-card .report-actions select:focus,
-.report-card .report-actions button:focus {
-    border-color: var(--accent);
-    outline: none;
-}
-.report-card .report-actions button {
+.report-card-header .badge {
     background: var(--accent);
-    border-color: var(--accent);
     color: #fff;
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 3px 10px;
+    min-width: 36px;
+    text-align: center;
+    border-radius: var(--radius-sm);
+    flex-shrink: 0;
 }
-.report-card .report-actions button:hover {
-    background: var(--accent-hover);
+.report-btn-full {
+    width: 100%;
+    justify-content: center;
+    margin-top: var(--space-2);
+    flex-shrink: 0;
+    min-height: 2.2rem;
 }
 
 /* ============================================================

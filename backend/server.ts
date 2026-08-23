@@ -25,8 +25,6 @@ import contratoInquilinoRoute from './src/routes/contratoInquilinoRoute.js';
 import { iniciarRecordatoriosReserva, detenerRecordatoriosReserva } from './src/services/recordatorioReservaService.js';
 import { verificarRelojBD } from './src/services/verificarRelojBD.js';
 
-// Rutas de las Preferencias ---
-import preferenciaRoute from './src/routes/preferenciaRoute.js';
 
 // Rutas del módulo de Inquilino
 import inquilinoAreaRoute from './src/routes/Inquilinoarearoute.js';
@@ -148,8 +146,6 @@ app.use('/api/reportes/contratos', contratoReporteRoutes);
 // con fetch + token, igual que /api/pagos/reporte).
 app.use('/api/reportes/visitas', reporteVisitasRoute);
 
-// --- Preferencias ---
-app.use('/api/preferencias', preferenciaRoute);
 
 // --- Iniciar Servidor ---
 app.listen(PORT, () => {
