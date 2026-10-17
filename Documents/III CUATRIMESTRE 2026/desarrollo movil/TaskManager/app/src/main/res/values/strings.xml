@@ -1,0 +1,39 @@
+<resources>
+    <string name="app_name">TaskManager</string>
+    <string name="btnTextMessage1_main">Mostrar mensaje Toast</string>
+    <string name="btnTextMessage2_main">Mostrar mensaje Snackbar</string>
+    <string name="btnTextOpenScreen_main">Abrir pantalla</string>
+    <string name="Textmessage1">El mensaje de toast</string>
+    <string name="TextMessage2">mensaje de snackbar</string>
+    <string name="TextSnackbar">desacer</string>
+    <string name="btnTask_main">Gestion de tareas</string>
+    <string name="btnTaskList_main">Listar tareas</string>
+
+    <!-- Etiquetas de TaskActivity requeridas por el XML -->
+    <string name="label_id" translatable="false">Digite el Id</string>
+    <string name="label_title" translatable="false">Digite el título</string>
+    <string name="label_description" translatable="false">Escriba la descripción</string>
+    <string name="label_duedate" translatable="false">Seleccione la fecha</string>
+    <string name="label_status" translatable="false">Digite el estado</string>
+    <string name="label_priority" translatable="false">Digite la prioridad</string>
+    <string name="label_assign" translatable="false">Asignada</string>
+    <string name="label_observation" translatable="false">Escriba una observación</string>
+
+    <!-- Textos de los botones -->
+    <string name="btn_save" translatable="false">Guardar</string>
+    <string name="btn_remove" translatable="false">Eliminar</string>
+    <string name="btn_cancel" translatable="false">Cancelar</string>
+
+    <!-- Mensajes CRUD y Diálogos -->
+    <string name="msg_success_save" translatable="false">Tarea guardada exitosamente</string>
+    <string name="msg_success_delete" translatable="false">Tarea eliminada exitosamente</string>
+    <string name="msg_error_duplicate" translatable="false">Error: Los datos ya existen</string>
+    <string name="msg_no_data_found" translatable="false">No se encontraron datos</string>
+    <string name="msg_error_save" translatable="false">Error al intentar guardar la tarea</string>
+    <string name="msg_error_delete" translatable="false">Error al intentar eliminar la tarea</string>
+    <string name="msg_cannot_delete_completed" translatable="false">La tarea no puede ser eliminada o anulada porque está completa</string>
+
+    <string name="dialog_confirm_message" translatable="false">¿Desea continuar con la acción?</string>
+    <string name="dialog_btn_yes" translatable="false">Sí</string>
+    <string name="dialog_btn_no" translatable="false">No</string>
+</resources>
